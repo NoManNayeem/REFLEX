@@ -1619,6 +1619,29 @@ input[type="range"]::-webkit-slider-thumb:hover {
     border-color: var(--danger);
 }
 
+/* Notification animations */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
 /* Responsive */
 @media (max-width: 1400px) {
     .app-container {

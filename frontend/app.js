@@ -1252,7 +1252,7 @@ function renderKnowledgeSources(urls) {
 async function addKnowledgeSource() {
     const url = elements.knowledgeUrl?.value.trim();
     if (!url) {
-        alert('Please enter a valid URL');
+        showNotification('Please enter a valid URL', 'error');
         return;
     }
     
@@ -1267,17 +1267,24 @@ async function addKnowledgeSource() {
         });
         
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to add URL');
+            let errorMessage = 'Failed to add URL';
+            try {
+                const error = await response.json();
+                errorMessage = error.detail || error.message || errorMessage;
+            } catch (e) {
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
         }
         
+        const result = await response.json();
         elements.knowledgeUrl.value = '';
         await loadKnowledgeBase();
-        showNotification('Knowledge source added successfully!', 'success');
+        showNotification(result.message || 'Knowledge source added successfully!', 'success');
         
     } catch (error) {
         console.error('Error adding knowledge source:', error);
-        alert('Failed to add knowledge source: ' + error.message);
+        showNotification(error.message || 'Failed to add knowledge source', 'error');
     } finally {
         elements.addKnowledgeBtn.disabled = false;
         elements.addKnowledgeBtn.innerHTML = '<i class="fas fa-plus"></i> Add URL';
@@ -1294,14 +1301,24 @@ async function removeKnowledgeSource(url) {
             body: JSON.stringify({ url })
         });
         
-        if (!response.ok) throw new Error('Failed to remove URL');
+        if (!response.ok) {
+            let errorMessage = 'Failed to remove URL';
+            try {
+                const error = await response.json();
+                errorMessage = error.detail || error.message || errorMessage;
+            } catch (e) {
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
         
+        const result = await response.json();
         await loadKnowledgeBase();
-        showNotification('Knowledge source removed', 'success');
+        showNotification(result.message || 'Knowledge source removed', 'success');
         
     } catch (error) {
         console.error('Error removing knowledge source:', error);
-        alert('Failed to remove knowledge source: ' + error.message);
+        showNotification(error.message || 'Failed to remove knowledge source', 'error');
     }
 }
 
@@ -1316,14 +1333,26 @@ async function reloadKnowledgeBase() {
             method: 'POST'
         });
         
-        if (!response.ok) throw new Error('Failed to reload knowledge base');
+        if (!response.ok) {
+            // Try to get error message from response
+            let errorMessage = 'Failed to reload knowledge base';
+            try {
+                const errorData = await response.json();
+                errorMessage = errorData.detail || errorData.message || errorMessage;
+            } catch (e) {
+                // If response is not JSON, use status text
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
         
-        showNotification('Knowledge base reloaded successfully!', 'success');
+        const result = await response.json();
+        showNotification(result.message || 'Knowledge base reloaded successfully!', 'success');
         await loadKnowledgeBase();
         
     } catch (error) {
         console.error('Error reloading knowledge base:', error);
-        alert('Failed to reload knowledge base: ' + error.message);
+        showNotification(error.message || 'Failed to reload knowledge base', 'error');
     } finally {
         elements.reloadKnowledgeBtn.disabled = false;
         elements.reloadKnowledgeBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Reload Knowledge Base';
@@ -1341,14 +1370,24 @@ async function clearKnowledgeBase() {
             method: 'POST'
         });
         
-        if (!response.ok) throw new Error('Failed to clear knowledge base');
+        if (!response.ok) {
+            let errorMessage = 'Failed to clear knowledge base';
+            try {
+                const error = await response.json();
+                errorMessage = error.detail || error.message || errorMessage;
+            } catch (e) {
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
+        }
         
-        showNotification('Knowledge base cleared', 'success');
+        const result = await response.json();
+        showNotification(result.message || 'Knowledge base cleared', 'success');
         await loadKnowledgeBase();
         
     } catch (error) {
         console.error('Error clearing knowledge base:', error);
-        alert('Failed to clear knowledge base: ' + error.message);
+        showNotification(error.message || 'Failed to clear knowledge base', 'error');
     } finally {
         elements.clearKnowledgeBtn.disabled = false;
         elements.clearKnowledgeBtn.innerHTML = '<i class="fas fa-trash"></i> Clear All';
