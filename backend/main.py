@@ -264,11 +264,12 @@ async def chat_stream(request: ChatRequest):
                 if chunk.get('type') == 'content':
                     # Stream content chunk
                     full_response_content += chunk.get('content', '')
-                    yield f"data: {json.dumps({
+                    chunk_data = {
                         'type': 'content',
                         'content': chunk.get('content', ''),
                         'done': False
-                    })}\n\n"
+                    }
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
                     
                 elif chunk.get('type') == 'done':
                     # Final chunk with metadata
@@ -278,22 +279,24 @@ async def chat_stream(request: ChatRequest):
                     relevant_skills = chunk.get('relevant_skills', [])
                     
                     # Send final content update
-                    yield f"data: {json.dumps({
+                    done_data = {
                         'type': 'done',
                         'content': '',
                         'done': True,
                         'tools_used': tools_used,
                         'relevant_skills': relevant_skills
-                    })}\n\n"
+                    }
+                    yield f"data: {json.dumps(done_data)}\n\n"
                     
                 elif chunk.get('type') == 'error':
                     # Error occurred
                     error_msg = chunk.get('error', 'Unknown error')
-                    yield f"data: {json.dumps({
+                    error_data = {
                         'type': 'error',
                         'error': error_msg,
                         'done': True
-                    })}\n\n"
+                    }
+                    yield f"data: {json.dumps(error_data)}\n\n"
                     return
             
             # Store agent response after streaming completes
