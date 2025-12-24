@@ -658,54 +658,54 @@ class SelfImprovingResearchAgent:
                     except Exception as e:
                         logger.error(f"Error in sync iterator: {e}", exc_info=True)
                 
-                # Process chunks
+                # Process chunks - Agno yields RunContentEvent objects
                 for chunk in sync_iter():
-                    # Check chunk type - Agno may yield different types
-                    if hasattr(chunk, 'content'):
-                        # Direct content chunk
-                        content = chunk.content or ""
-                        if content:
-                            accumulated_content += content
-                            yield {
-                                'type': 'content',
-                                'content': content,
-                                'done': False
-                            }
+                    content_to_yield = None
+                    
+                    # Handle RunContentEvent objects (Agno's streaming format)
+                    if hasattr(chunk, 'content') and hasattr(chunk, 'event'):
+                        # This is a RunContentEvent
+                        if chunk.event == 'RunContent' or chunk.event == 'content':
+                            content = chunk.content
+                            if content:
+                                # Content might be string or other type
+                                if isinstance(content, str):
+                                    content_to_yield = content
+                                else:
+                                    # Try to convert to string
+                                    content_to_yield = str(content)
+                    elif hasattr(chunk, 'content'):
+                        # Direct content attribute
+                        content = chunk.content
+                        if isinstance(content, str):
+                            content_to_yield = content
+                        else:
+                            content_to_yield = str(content) if content else None
                     elif hasattr(chunk, 'text'):
-                        # Text chunk
-                        content = chunk.text or ""
-                        if content:
-                            accumulated_content += content
-                            yield {
-                                'type': 'content',
-                                'content': content,
-                                'done': False
-                            }
+                        # Text attribute
+                        content_to_yield = chunk.text if isinstance(chunk.text, str) else str(chunk.text) if chunk.text else None
                     elif isinstance(chunk, str):
-                        # String chunk
-                        accumulated_content += chunk
+                        # Direct string
+                        content_to_yield = chunk
+                    
+                    # Yield content if we have it
+                    if content_to_yield:
+                        accumulated_content += content_to_yield
                         yield {
                             'type': 'content',
-                            'content': chunk,
+                            'content': content_to_yield,
                             'done': False
                         }
-                    elif hasattr(chunk, 'event'):
-                        # Event-based chunk
-                        if chunk.event == 'content' or chunk.event == 'text':
-                            content = getattr(chunk, 'content', getattr(chunk, 'text', ''))
-                            if content:
-                                accumulated_content += content
-                                yield {
-                                    'type': 'content',
-                                    'content': content,
-                                    'done': False
-                                }
                     
-                    # Check if this is the final chunk
-                    if hasattr(chunk, 'done') and chunk.done:
+                    # Check if this is the final chunk (RunOutput)
+                    # Agno's final chunk is typically a RunOutput object, not a RunContentEvent
+                    if hasattr(chunk, 'content') and not hasattr(chunk, 'event'):
+                        # This might be the final RunOutput
                         run_response = chunk
-                        break
                     elif hasattr(chunk, 'is_final') and chunk.is_final:
+                        run_response = chunk
+                    elif hasattr(chunk, '__class__') and 'RunOutput' in str(chunk.__class__):
+                        # Final RunOutput object
                         run_response = chunk
                         break
                 
