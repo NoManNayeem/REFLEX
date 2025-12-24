@@ -29,52 +29,6 @@
             </div>
         </aside>
 
-        <!-- Stats Sidebar -->
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="logo">
-                    <i class="fas fa-brain"></i>
-                    <span>REFLEX</span>
-                </div>
-                <button class="theme-toggle" id="themeToggle">
-                    <i class="fas fa-moon"></i>
-                </button>
-            </div>
-
-            <div class="sidebar-content">
-                <div class="stats-card">
-                    <h3><i class="fas fa-chart-line"></i> Performance</h3>
-                    <div class="stat-item">
-                        <span class="stat-label">Total Tasks</span>
-                        <span class="stat-value" id="totalTasks">0</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Success Rate</span>
-                        <span class="stat-value" id="successRate">0%</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Avg Reward</span>
-                        <span class="stat-value" id="avgReward">0.00</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Skills Learned</span>
-                        <span class="stat-value" id="skillCount">0</span>
-                    </div>
-                </div>
-
-                <div class="skills-section">
-                    <h3><i class="fas fa-lightbulb"></i> Top Skills</h3>
-                    <div id="topSkillsList" class="skills-list">
-                        <p class="empty-state">No skills learned yet</p>
-                    </div>
-                </div>
-
-                <button class="train-btn" id="trainBtn">
-                    <i class="fas fa-graduation-cap"></i>
-                    Trigger Training
-                </button>
-            </div>
-        </aside>
 
         <!-- Main Content -->
         <main class="main-content">
@@ -159,10 +113,23 @@
             </div>
         </main>
 
-        <!-- Right Panel -->
+        <!-- Unified Right Panel -->
         <aside class="right-panel">
+            <div class="panel-header">
+                <div class="logo">
+                    <i class="fas fa-brain"></i>
+                    <span>REFLEX</span>
+                </div>
+                <button class="theme-toggle" id="themeToggle">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+            
             <div class="panel-tabs">
-                <button class="tab-btn active" data-tab="feedback">
+                <button class="tab-btn active" data-tab="stats">
+                    <i class="fas fa-chart-line"></i> Stats
+                </button>
+                <button class="tab-btn" data-tab="feedback">
                     <i class="fas fa-star"></i> Feedback
                 </button>
                 <button class="tab-btn" data-tab="trajectory">
@@ -174,8 +141,45 @@
             </div>
 
             <div class="panel-content">
+                <!-- Stats Tab -->
+                <div class="tab-pane active" id="statsTab">
+                    <h3>Performance Metrics</h3>
+                    <p class="tab-description">Real-time agent performance and statistics</p>
+                    
+                    <div class="stats-card">
+                        <div class="stat-item">
+                            <span class="stat-label">Total Tasks</span>
+                            <span class="stat-value" id="totalTasks">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Success Rate</span>
+                            <span class="stat-value" id="successRate">0%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Avg Reward</span>
+                            <span class="stat-value" id="avgReward">0.00</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Skills Learned</span>
+                            <span class="stat-value" id="skillCount">0</span>
+                        </div>
+                    </div>
+
+                    <div class="skills-section">
+                        <h4><i class="fas fa-lightbulb"></i> Top Skills</h4>
+                        <div id="topSkillsList" class="skills-list">
+                            <p class="empty-state">No skills learned yet</p>
+                        </div>
+                    </div>
+
+                    <button class="train-btn" id="trainBtn">
+                        <i class="fas fa-graduation-cap"></i>
+                        Trigger Training
+                    </button>
+                </div>
+                
                 <!-- Feedback Tab -->
-                <div class="tab-pane active" id="feedbackTab">
+                <div class="tab-pane" id="feedbackTab">
                     <h3>Provide Feedback</h3>
                     <p class="tab-description">Help the agent learn by providing feedback on its last response</p>
                     

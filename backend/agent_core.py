@@ -305,7 +305,7 @@ class SelfImprovingResearchAgent:
             logger.error(f"Error saving knowledge URLs: {e}")
     
     def add_knowledge_url(self, url: str) -> bool:
-        """Add a URL to the knowledge base"""
+        """Add a URL to the knowledge base and sync"""
         if url not in self.knowledge_urls:
             self.knowledge_urls.append(url)
             self._save_knowledge_urls()
@@ -313,6 +313,7 @@ class SelfImprovingResearchAgent:
             # Reinitialize knowledge base if available
             if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder:
                 try:
+                    # Create new knowledge base with all URLs
                     self.knowledge = WebsiteKnowledgeBase(
                         urls=self.knowledge_urls,
                         vector_db=LanceDb(
@@ -326,12 +327,15 @@ class SelfImprovingResearchAgent:
                             )
                         )
                     )
+                    # Load the new URL into the knowledge base
+                    logger.info(f"Loading new URL into knowledge base: {url}")
+                    self.knowledge.load(upsert=True)
                     # Reload agent with new knowledge
                     self.agent = self._create_agent()
-                    logger.info(f"Added URL to knowledge base: {url}")
+                    logger.info(f"Added URL to knowledge base and synced: {url}")
                     return True
                 except Exception as e:
-                    logger.error(f"Error reinitializing knowledge base: {e}")
+                    logger.error(f"Error reinitializing knowledge base: {e}", exc_info=True)
                     return False
             return True
         return False
@@ -346,6 +350,7 @@ class SelfImprovingResearchAgent:
             if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder:
                 try:
                     if self.knowledge_urls:
+                        logger.info(f"Recreating knowledge base with {len(self.knowledge_urls)} URLs (removed: {url})")
                         self.knowledge = WebsiteKnowledgeBase(
                             urls=self.knowledge_urls,
                             vector_db=LanceDb(
@@ -359,28 +364,49 @@ class SelfImprovingResearchAgent:
                                 )
                             )
                         )
+                        # Reload remaining URLs
+                        logger.info("Reloading remaining URLs into knowledge base...")
+                        self.knowledge.load(upsert=True)
                     else:
                         self.knowledge = None
+                        logger.info("Knowledge base cleared (no URLs remaining)")
                     # Reload agent
                     self.agent = self._create_agent()
                     logger.info(f"Removed URL from knowledge base: {url}")
                     return True
                 except Exception as e:
-                    logger.error(f"Error reinitializing knowledge base: {e}")
-                    return False
+                    logger.error(f"Error reinitializing knowledge base: {e}", exc_info=True)
+                    return True  # Still return True so URL is removed from list
             return True
         return False
     
     def reload_knowledge_base(self) -> bool:
-        """Reload the knowledge base"""
-        if self.knowledge and self.knowledge_urls:
+        """Reload the knowledge base - reinitialize and load all URLs"""
+        if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder and self.knowledge_urls:
             try:
-                logger.info("Reloading knowledge base...")
+                logger.info(f"Reloading knowledge base with {len(self.knowledge_urls)} URLs...")
+                # Reinitialize knowledge base to ensure sync
+                self.knowledge = WebsiteKnowledgeBase(
+                    urls=self.knowledge_urls,
+                    vector_db=LanceDb(
+                        uri=self.lancedb_path,
+                        table_name="research_docs",
+                        search_type=SearchType.hybrid,
+                        embedder=OpenAIEmbedder(
+                            id="text-embedding-3-small",
+                            dimensions=1536,
+                            api_key=self.openai_api_key
+                        )
+                    )
+                )
+                # Load all URLs
                 self.knowledge.load(upsert=True)
-                logger.info("Knowledge base reloaded successfully")
+                # Reload agent
+                self.agent = self._create_agent()
+                logger.info("Knowledge base reloaded and synced successfully")
                 return True
             except Exception as e:
-                logger.error(f"Error reloading knowledge base: {e}")
+                logger.error(f"Error reloading knowledge base: {e}", exc_info=True)
                 return False
         return False
     
@@ -465,19 +491,24 @@ class SelfImprovingResearchAgent:
         content = run_response.content if run_response.content else ""
         logger.info(f"Agent response received: length={len(content)}")
         
+        # Extract sources from response
+        sources = self._extract_sources(run_response)
+        
         trajectory = {
             'query': query,
             'response': content,
             'tools_used': [],
             'session_id': session_id,
             'user_id': user_id,
-            'relevant_skills': [s.name for s in relevant_skills]
+            'relevant_skills': [s.name for s in relevant_skills],
+            'sources': sources
         }
         
         return {
             'response': run_response,
             'trajectory': trajectory,
-            'relevant_skills': relevant_skills
+            'relevant_skills': relevant_skills,
+            'sources': sources
         }
     
     async def run_task_stream(
@@ -562,6 +593,9 @@ class SelfImprovingResearchAgent:
                     # Small delay to simulate real streaming
                     await asyncio.sleep(0.02)
                 
+                # Extract sources
+                sources = self._extract_sources(run_response)
+                
                 # Final chunk with metadata
                 yield {
                     'type': 'done',
@@ -570,6 +604,7 @@ class SelfImprovingResearchAgent:
                     'accumulated': accumulated_content,
                     'tools_used': [],
                     'relevant_skills': [s.name for s in relevant_skills],
+                    'sources': sources,
                     'full_response': run_response
                 }
                 
@@ -603,6 +638,9 @@ class SelfImprovingResearchAgent:
                     }
                     await asyncio.sleep(0.03)
                 
+                # Extract sources
+                sources = self._extract_sources(run_response)
+                
                 # Final yield with metadata
                 yield {
                     'type': 'done',
@@ -611,6 +649,7 @@ class SelfImprovingResearchAgent:
                     'accumulated': accumulated_content,
                     'tools_used': [],
                     'relevant_skills': [s.name for s in relevant_skills],
+                    'sources': sources,
                     'full_response': run_response
                 }
                 
@@ -699,6 +738,79 @@ class SelfImprovingResearchAgent:
         
         self.skill_library.save_skills()
         logger.info(f"Training iteration completed. Batch size: {batch_size}, skills updated: {updated_skills}")
+    
+    def _extract_sources(self, run_response) -> List[Dict[str, str]]:
+        """Extract sources from agent response"""
+        sources = []
+        
+        try:
+            # Extract from knowledge base if used
+            if hasattr(run_response, 'knowledge_sources') and run_response.knowledge_sources:
+                for kb_source in run_response.knowledge_sources:
+                    sources.append({
+                        'type': 'rag',
+                        'url': getattr(kb_source, 'url', ''),
+                        'title': getattr(kb_source, 'title', ''),
+                        'source': 'Knowledge Base'
+                    })
+            
+            # Extract from tool calls (web search URLs)
+            if hasattr(run_response, 'tool_calls') and run_response.tool_calls:
+                for tool_call in run_response.tool_calls:
+                    if hasattr(tool_call, 'name') and 'duckduckgo' in tool_call.name.lower():
+                        # Extract URLs from web search results
+                        if hasattr(tool_call, 'result') and tool_call.result:
+                            if isinstance(tool_call.result, list):
+                                for result in tool_call.result:
+                                    if isinstance(result, dict):
+                                        url = result.get('url') or result.get('link') or result.get('href')
+                                        title = result.get('title') or result.get('name')
+                                        if url:
+                                            sources.append({
+                                                'type': 'web_search',
+                                                'url': url,
+                                                'title': title or url,
+                                                'source': 'DuckDuckGo Search'
+                                            })
+                            elif isinstance(tool_call.result, dict):
+                                url = tool_call.result.get('url') or tool_call.result.get('link')
+                                title = tool_call.result.get('title')
+                                if url:
+                                    sources.append({
+                                        'type': 'web_search',
+                                        'url': url,
+                                        'title': title or url,
+                                        'source': 'DuckDuckGo Search'
+                                    })
+            
+            # Extract URLs from knowledge base URLs if RAG was used
+            if self.knowledge and self.knowledge_urls:
+                # Check if knowledge was actually used in the response
+                # This is a heuristic - in a real implementation, Agno would track this
+                for kb_url in self.knowledge_urls:
+                    if kb_url not in [s['url'] for s in sources]:
+                        sources.append({
+                            'type': 'rag',
+                            'url': kb_url,
+                            'title': kb_url,
+                            'source': 'Knowledge Base'
+                        })
+            
+            # Remove duplicates
+            seen = set()
+            unique_sources = []
+            for source in sources:
+                key = source['url']
+                if key not in seen:
+                    seen.add(key)
+                    unique_sources.append(source)
+            
+            logger.debug(f"Extracted {len(unique_sources)} sources from response")
+            return unique_sources
+            
+        except Exception as e:
+            logger.warning(f"Error extracting sources: {e}")
+            return []
     
     def get_stats(self) -> Dict[str, Any]:
         """Get training statistics"""

@@ -592,19 +592,22 @@ async function sendMessage() {
                             // Finalize message
                             toolsUsed = data.tools_used || [];
                             relevantSkills = data.relevant_skills || [];
+                            const sources = data.sources || [];
                             
                             // Replace streaming message with final message
                             if (agentMessageId) {
                                 replaceStreamingMessage(agentMessageId, accumulatedContent, {
                                     tools: toolsUsed,
-                                    skills: relevantSkills
+                                    skills: relevantSkills,
+                                    sources: sources
                                 });
                             } else {
                                 // Fallback: create message if streaming didn't work
                                 removeLoadingMessage(loadingId);
                                 addMessage('agent', accumulatedContent, {
                                     tools: toolsUsed,
-                                    skills: relevantSkills
+                                    skills: relevantSkills,
+                                    sources: sources
                                 });
                             }
                             
@@ -612,7 +615,8 @@ async function sendMessage() {
                             state.lastTrajectory = {
                                 message: accumulatedContent,
                                 tools_used: toolsUsed,
-                                relevant_skills: relevantSkills
+                                relevant_skills: relevantSkills,
+                                sources: sources
                             };
                             updateTrajectoryInfo(state.lastTrajectory);
                             
@@ -683,7 +687,7 @@ function addMessage(type, content, meta = {}, shouldScroll = true) {
     
     contentDiv.appendChild(textDiv);
     
-    if (meta.tools || meta.skills) {
+    if (meta.tools || meta.skills || meta.sources) {
         const metaDiv = document.createElement('div');
         metaDiv.className = 'message-meta';
         
@@ -693,6 +697,16 @@ function addMessage(type, content, meta = {}, shouldScroll = true) {
         
         if (meta.skills && meta.skills.length > 0) {
             metaDiv.innerHTML += `<span><i class="fas fa-lightbulb"></i> ${meta.skills.join(', ')}</span>`;
+        }
+        
+        if (meta.sources && meta.sources.length > 0) {
+            const sourcesHtml = meta.sources.map(source => {
+                const icon = source.type === 'rag' ? 'fa-database' : 'fa-globe';
+                return `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="${escapeHtml(source.title)}">
+                    <i class="fas ${icon}"></i> ${escapeHtml(source.title || source.url)}
+                </a>`;
+            }).join('');
+            metaDiv.innerHTML += `<div class="message-sources"><i class="fas fa-link"></i> Sources: ${sourcesHtml}</div>`;
         }
         
         contentDiv.appendChild(metaDiv);
@@ -866,7 +880,7 @@ function replaceStreamingMessage(id, content, meta = {}) {
     
     // Add metadata if provided
     const contentDiv = messageDiv.querySelector('.message-content');
-    if (contentDiv && (meta.tools || meta.skills)) {
+    if (contentDiv && (meta.tools || meta.skills || meta.sources)) {
         // Remove existing meta if any
         const existingMeta = contentDiv.querySelector('.message-meta');
         if (existingMeta) existingMeta.remove();
@@ -880,6 +894,16 @@ function replaceStreamingMessage(id, content, meta = {}) {
         
         if (meta.skills && meta.skills.length > 0) {
             metaDiv.innerHTML += `<span><i class="fas fa-lightbulb"></i> ${meta.skills.join(', ')}</span>`;
+        }
+        
+        if (meta.sources && meta.sources.length > 0) {
+            const sourcesHtml = meta.sources.map(source => {
+                const icon = source.type === 'rag' ? 'fa-database' : 'fa-globe';
+                return `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="${escapeHtml(source.title)}">
+                    <i class="fas ${icon}"></i> ${escapeHtml(source.title || source.url)}
+                </a>`;
+            }).join('');
+            metaDiv.innerHTML += `<div class="message-sources"><i class="fas fa-link"></i> Sources: ${sourcesHtml}</div>`;
         }
         
         contentDiv.appendChild(metaDiv);

@@ -37,6 +37,26 @@ from models import (
     AgentStats
 )
 
+# Import knowledge base modules for status check
+try:
+    from agno.knowledge.website import WebsiteKnowledgeBase
+except ImportError:
+    try:
+        from agno.knowledge.url import UrlKnowledge as WebsiteKnowledgeBase
+    except ImportError:
+        WebsiteKnowledgeBase = None
+
+try:
+    from agno.vectordb.lancedb import LanceDb, SearchType
+except ImportError:
+    LanceDb = None
+    SearchType = None
+
+try:
+    from agno.embedder.openai import OpenAIEmbedder
+except ImportError:
+    OpenAIEmbedder = None
+
 # Load environment variables from root .env file
 # Try root directory first, then fallback to backend/.env
 import pathlib
@@ -277,6 +297,7 @@ async def chat_stream(request: ChatRequest):
                     run_response = chunk.get('full_response')
                     tools_used = chunk.get('tools_used', [])
                     relevant_skills = chunk.get('relevant_skills', [])
+                    sources = chunk.get('sources', [])
                     
                     # Send final content update
                     done_data = {
@@ -284,7 +305,8 @@ async def chat_stream(request: ChatRequest):
                         'content': '',
                         'done': True,
                         'tools_used': tools_used,
-                        'relevant_skills': relevant_skills
+                        'relevant_skills': relevant_skills,
+                        'sources': sources
                     }
                     yield f"data: {json.dumps(done_data)}\n\n"
                     
@@ -610,13 +632,18 @@ async def get_knowledge_base():
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
     try:
-        enabled = agent_instance.knowledge is not None
+        # Check if knowledge base is enabled (has OpenAI key and modules)
+        has_openai_key = bool(agent_instance.openai_api_key)
+        has_modules = bool(WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder)
+        enabled = agent_instance.knowledge is not None and has_openai_key and has_modules
         urls = agent_instance.knowledge_urls if agent_instance.knowledge_urls else []
         
         return {
             "enabled": enabled,
             "urls": urls,
-            "count": len(urls)
+            "count": len(urls),
+            "has_openai_key": has_openai_key,
+            "has_modules": has_modules
         }
     except Exception as e:
         logger.error(f"Error getting knowledge base: {e}")
