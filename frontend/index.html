@@ -6,6 +6,7 @@
     <title>REFLEX - Research Engine with Feedback-Driven Learning</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
     <div class="app-container">
@@ -61,6 +62,9 @@
             <header class="main-header">
                 <h1>REFLEX - Research Engine with Feedback-Driven Learning</h1>
                 <div class="header-actions">
+                    <button class="icon-btn" id="helpBtn" title="Show Help">
+                        <i class="fas fa-question-circle"></i>
+                    </button>
                     <button class="icon-btn" id="refreshBtn" title="Refresh Stats">
                         <i class="fas fa-sync-alt"></i>
                     </button>
@@ -69,6 +73,38 @@
                     </button>
                 </div>
             </header>
+
+            <!-- Help/Instructions Panel (Collapsible) -->
+            <div class="help-panel" id="helpPanel">
+                <div class="help-header">
+                    <h3><i class="fas fa-info-circle"></i> How to Use REFLEX</h3>
+                    <button class="close-help" id="closeHelpBtn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="help-content">
+                    <div class="help-section">
+                        <h4><i class="fas fa-comments"></i> Chat Interface</h4>
+                        <p>Ask questions or request research. REFLEX maintains conversation context and learns from your feedback.</p>
+                    </div>
+                    <div class="help-section">
+                        <h4><i class="fas fa-chart-line"></i> Performance Metrics</h4>
+                        <p>View real-time stats: total tasks, success rate, average reward, and learned skills.</p>
+                    </div>
+                    <div class="help-section">
+                        <h4><i class="fas fa-lightbulb"></i> Skill Library</h4>
+                        <p>REFLEX accumulates skills from successful interactions and reuses them for better performance.</p>
+                    </div>
+                    <div class="help-section">
+                        <h4><i class="fas fa-star"></i> Feedback System</h4>
+                        <p>Rate responses to help REFLEX improve. Provide task success, quality, efficiency scores, and optional skill descriptions.</p>
+                    </div>
+                    <div class="help-section">
+                        <h4><i class="fas fa-graduation-cap"></i> Training</h4>
+                        <p>Trigger training iterations to help REFLEX learn from accumulated trajectories and improve over time.</p>
+                    </div>
+                </div>
+            </div>
 
             <!-- Chat Area -->
             <div class="chat-container">
@@ -229,7 +265,7 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2"></script>
 </body>
 </html>
 

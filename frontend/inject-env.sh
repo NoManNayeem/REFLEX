@@ -2,12 +2,10 @@
 # Inject environment variables into app.js
 
 # Use localhost for browser access (browser can't access Docker service names)
-API_BASE_URL=${API_BASE_URL:-http://localhost:8000/api}
+# Note: API_BASE is now hardcoded in app.js to avoid browser caching issues
+# This script is kept for potential future use but doesn't modify API_BASE anymore
 
-# Replace the API_BASE constant in app.js
-sed -i "s|const API_BASE = 'http://localhost:8000/api';|const API_BASE = '${API_BASE_URL}';|g" /usr/share/nginx/html/app.js
-
-echo "✅ Injected API_BASE_URL: ${API_BASE_URL}"
+echo "✅ Frontend startup script executed (API_BASE is hardcoded in app.js)"
 
 # Start nginx
 exec nginx -g "daemon off;"

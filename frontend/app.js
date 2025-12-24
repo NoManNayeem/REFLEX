@@ -2,7 +2,8 @@
 
 // API_BASE - Use localhost for browser access (works in both Docker and local dev)
 // In Docker, the browser accesses localhost:8000 which is mapped to the backend container
-const API_BASE = window.API_BASE_URL || 'http://localhost:8000/api';
+// Note: Browser runs on host machine, so it must use localhost, not Docker service names
+const API_BASE = 'http://localhost:8000/api';
 console.log('API Base URL:', API_BASE);
 
 // State management
@@ -55,7 +56,12 @@ const elements = {
     skillsModal: document.getElementById('skillsModal'),
     closeModal: document.getElementById('closeModal'),
     allSkillsList: document.getElementById('allSkillsList'),
-    skillSearch: document.getElementById('skillSearch')
+    skillSearch: document.getElementById('skillSearch'),
+    
+    // Help panel
+    helpBtn: document.getElementById('helpBtn'),
+    helpPanel: document.getElementById('helpPanel'),
+    closeHelpBtn: document.getElementById('closeHelpBtn')
 };
 
 // Initialize application
@@ -148,7 +154,54 @@ function init() {
     // Load initial stats
     updateStats();
     
+    // Load chat history
+    loadChatHistory();
+    
+    // Help panel toggle
+    if (elements.helpBtn) {
+        elements.helpBtn.addEventListener('click', () => {
+            elements.helpPanel.classList.toggle('active');
+        });
+    }
+    if (elements.closeHelpBtn) {
+        elements.closeHelpBtn.addEventListener('click', () => {
+            elements.helpPanel.classList.remove('active');
+        });
+    }
+    
     console.log('✅ Application initialized');
+}
+
+// Load chat history from database
+async function loadChatHistory() {
+    try {
+        const response = await fetch(`${API_BASE}/chat/history?session_id=${state.sessionId}`);
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        if (data.messages && data.messages.length > 0) {
+            // Remove welcome message if history exists
+            const welcomeMsg = elements.chatMessages.querySelector('.welcome-message');
+            if (welcomeMsg) welcomeMsg.remove();
+            
+            // Load messages
+            data.messages.forEach(msg => {
+                addMessage(msg.role, msg.content, {
+                    tools: msg.tools_used || [],
+                    skills: msg.skills_applied || []
+                }, false); // Don't scroll for each historical message
+            });
+            
+            // Scroll to bottom after loading all
+            elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+            state.messageCount = data.messages.length;
+            if (elements.messageCountDisplay) {
+                elements.messageCountDisplay.textContent = state.messageCount;
+            }
+        }
+    } catch (error) {
+        console.error('Error loading chat history:', error);
+    }
 }
 
 // Send message to agent
@@ -167,8 +220,12 @@ async function sendMessage() {
     elements.messageInput.value = '';
     elements.messageInput.style.height = 'auto';
     
-    // Show loading
-    const loadingId = addLoadingMessage();
+    // Show loading with activity updates
+    const loadingId = addLoadingMessage('Analyzing your question...');
+    
+    // Simulate activity updates (in real implementation, use SSE for real-time updates)
+    setTimeout(() => updateLoadingStatus(loadingId, 'Searching for information...'), 500);
+    setTimeout(() => updateLoadingStatus(loadingId, 'Generating response...'), 1500);
     
     try {
         const response = await fetch(`${API_BASE}/chat`, {
@@ -188,7 +245,7 @@ async function sendMessage() {
         // Remove loading
         removeLoadingMessage(loadingId);
         
-        // Add agent message
+        // Add agent message with markdown rendering
         addMessage('agent', data.message, {
             tools: data.tools_used,
             skills: data.relevant_skills
@@ -217,9 +274,13 @@ async function sendMessage() {
 }
 
 // Add message to chat
-function addMessage(type, content, meta = {}) {
+function addMessage(type, content, meta = {}, shouldScroll = true) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
+    
+    // Add fade-in animation
+    messageDiv.style.opacity = '0';
+    messageDiv.style.transform = 'translateY(10px)';
     
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
@@ -253,23 +314,42 @@ function addMessage(type, content, meta = {}) {
     messageDiv.appendChild(contentDiv);
     
     elements.chatMessages.appendChild(messageDiv);
-    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    
+    // Animate in
+    requestAnimationFrame(() => {
+        messageDiv.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        messageDiv.style.opacity = '1';
+        messageDiv.style.transform = 'translateY(0)';
+    });
+    
+    if (shouldScroll) {
+        elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    }
 }
 
-// Format message (basic markdown support)
+// Format message with proper markdown rendering
 function formatMessage(content) {
-    return content
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>');
+    if (typeof marked !== 'undefined') {
+        // Use marked.js for proper markdown rendering
+        return marked.parse(content, {
+            breaks: true,
+            gfm: true
+        });
+    } else {
+        // Fallback to basic formatting
+        return content
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`(.*?)`/g, '<code>$1</code>')
+            .replace(/\n/g, '<br>');
+    }
 }
 
-// Add loading message
-function addLoadingMessage() {
+// Add loading message with activity status
+function addLoadingMessage(statusText = 'Thinking...') {
     const id = `loading_${Date.now()}`;
     const messageDiv = document.createElement('div');
-    messageDiv.className = 'message agent';
+    messageDiv.className = 'message agent loading';
     messageDiv.id = id;
     
     const avatar = document.createElement('div');
@@ -279,10 +359,13 @@ function addLoadingMessage() {
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     contentDiv.innerHTML = `
-        <div class="loading-dots">
-            <span></span>
-            <span></span>
-            <span></span>
+        <div class="agent-activity">
+            <div class="activity-status">${statusText}</div>
+            <div class="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
         </div>
     `;
     
@@ -293,6 +376,20 @@ function addLoadingMessage() {
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
     
     return id;
+}
+
+// Update loading message status
+function updateLoadingStatus(id, statusText) {
+    const loadingMsg = document.getElementById(id);
+    if (loadingMsg) {
+        const statusEl = loadingMsg.querySelector('.activity-status');
+        if (statusEl) {
+            statusEl.textContent = statusText;
+            // Add animation
+            statusEl.classList.add('pulse');
+            setTimeout(() => statusEl.classList.remove('pulse'), 500);
+        }
+    }
 }
 
 // Remove loading message

@@ -257,92 +257,388 @@ curl http://localhost:8000/api/skills
 
 ## 🎯 Key Components
 
-### Backend Architecture
+### System Architecture
 
-```
-┌─────────────────────────────────────┐
-│        FastAPI Application          │
-│  (main.py - API endpoints)          │
-└────────────┬────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────┐
-│   SelfImprovingResearchAgent        │
-│  (agent_core.py - Core logic)       │
-├─────────────────────────────────────┤
-│  • Agno Agent (Claude Sonnet 4)     │
-│  • SkillLibrary (persistence)       │
-│  • TrajectoryBuffer (RL memory)     │
-│  • RewardSignal (feedback)          │
-└─────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────┐
-│         Storage Layer               │
-├─────────────────────────────────────┤
-│  • SQLite (sessions, memory)        │
-│  • LanceDB (vector embeddings)     │
-│  • JSON (skill library)             │
-└─────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph "Frontend Layer"
+        UI[Web UI<br/>HTML/CSS/JS]
+        UI -->|HTTP/REST| API[FastAPI Backend]
+    end
+    
+    subgraph "Backend Layer"
+        API --> Agent[SelfImprovingResearchAgent]
+        Agent --> Agno[Agno Agent<br/>Claude Sonnet 4]
+        Agent --> Skills[SkillLibrary]
+        Agent --> Buffer[TrajectoryBuffer]
+        Agent --> Reward[RewardSignal]
+    end
+    
+    subgraph "Storage Layer"
+        Skills -->|JSON| SkillFile[skills.json]
+        Buffer -->|Memory| Trajectories[Trajectory Memory]
+        Agent -->|SQLite| DB[(ConversationDB<br/>Messages)]
+        Agent -->|SQLite| AgentDB[(Agent Memory)]
+        Agent -->|LanceDB| VectorDB[(Vector DB<br/>Embeddings)]
+    end
+    
+    subgraph "External Services"
+        Agno -->|API| Claude[Anthropic Claude]
+        Agno -->|Search| DDG[DuckDuckGo]
+        VectorDB -->|Embeddings| OpenAI[OpenAI API]
+    end
+    
+    style UI fill:#6366f1,color:#fff
+    style API fill:#8b5cf6,color:#fff
+    style Agent fill:#10b981,color:#fff
+    style Agno fill:#f59e0b,color:#fff
 ```
 
-### Frontend Architecture
+### Data Flow Diagram
 
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    participant Agent
+    participant LLM
+    participant DB
+    participant VectorDB
+    
+    User->>Frontend: Ask Question
+    Frontend->>Backend: POST /api/chat
+    Backend->>DB: Save User Message
+    Backend->>Agent: run_task(query)
+    Agent->>VectorDB: Search Knowledge Base
+    VectorDB-->>Agent: Relevant Context
+    Agent->>LLM: Generate Response
+    LLM-->>Agent: Response Content
+    Agent->>DB: Save Agent Response
+    Backend-->>Frontend: Return Response
+    Frontend-->>User: Display Response
+    
+    User->>Frontend: Provide Feedback
+    Frontend->>Backend: POST /api/feedback
+    Backend->>Agent: provide_feedback(reward)
+    Agent->>Skills: Update Skill Stats
+    Agent->>Buffer: Store Trajectory
+    Backend-->>Frontend: Feedback Processed
 ```
-┌─────────────────────────────────────┐
-│          index.html                 │
-│  (Structure and layout)             │
-└────────────┬────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────┐
-│          styles.css                 │
-│  (Modern styling + themes)          │
-└────────────┬────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────┐
-│           app.js                    │
-│  (Application logic)                │
-├─────────────────────────────────────┤
-│  • State management                 │
-│  • API communication                │
-│  • UI updates                       │
-│  • Event handling                   │
-└─────────────────────────────────────┘
+
+### Reinforcement Learning Training Loop
+
+```mermaid
+flowchart TD
+    Start([User Query]) --> Process[Agent Processes Query]
+    Process --> Response[Generate Response]
+    Response --> Store[Store Trajectory]
+    Store --> Feedback{User Feedback?}
+    
+    Feedback -->|Yes| Reward[Calculate Reward]
+    Feedback -->|No| Wait[Wait for Feedback]
+    Wait --> Feedback
+    
+    Reward --> Update[Update Skill Stats]
+    Update --> Buffer[Add to Trajectory Buffer]
+    Buffer --> Check{Buffer Size >= Batch?}
+    
+    Check -->|No| Continue[Continue Collecting]
+    Continue --> Start
+    
+    Check -->|Yes| Train[Training Iteration]
+    Train --> Compute[Compute Advantages]
+    Compute --> Boost[Boost High-Advantage Skills]
+    Boost --> Recreate[Recreate Agent with Updated Skills]
+    Recreate --> Improved[Improved Performance]
+    Improved --> Start
+    
+    style Start fill:#6366f1,color:#fff
+    style Train fill:#10b981,color:#fff
+    style Improved fill:#f59e0b,color:#fff
+```
+
+### Component Interaction Diagram
+
+```mermaid
+graph LR
+    subgraph "Core Agent"
+        A[SelfImprovingResearchAgent]
+        B[Agno Agent]
+        C[SkillLibrary]
+        D[TrajectoryBuffer]
+        E[RewardSignal]
+    end
+    
+    subgraph "API Layer"
+        F[FastAPI Endpoints]
+        G[Chat Handler]
+        H[Feedback Handler]
+        I[Training Handler]
+    end
+    
+    subgraph "Data Layer"
+        J[ConversationDB]
+        K[SQLite Messages]
+        L[Skill JSON]
+        M[Vector DB]
+    end
+    
+    F --> G
+    F --> H
+    F --> I
+    G --> A
+    H --> A
+    I --> A
+    
+    A --> B
+    A --> C
+    A --> D
+    A --> E
+    A --> J
+    
+    J --> K
+    C --> L
+    B --> M
+    
+    style A fill:#6366f1,color:#fff
+    style B fill:#8b5cf6,color:#fff
+    style F fill:#10b981,color:#fff
+```
+
+### User Journey Flowchart
+
+```mermaid
+flowchart TD
+    Start([User Opens App]) --> Load[Load Chat History]
+    Load --> Display[Display Previous Messages]
+    Display --> Input[User Types Question]
+    Input --> Send[Send Message]
+    
+    Send --> Status1[Show: Analyzing...]
+    Status1 --> Status2[Show: Searching...]
+    Status2 --> Status3[Show: Generating...]
+    Status3 --> Response[Display Response]
+    
+    Response --> View[View Tools & Skills Used]
+    View --> Feedback{Provide Feedback?}
+    
+    Feedback -->|Yes| Rate[Rate Response Quality]
+    Rate --> Optional{Create Skill?}
+    Optional -->|Yes| SkillForm[Fill Skill Form]
+    Optional -->|No| Submit[Submit Feedback]
+    SkillForm --> Submit
+    
+    Submit --> Update[Update Agent Stats]
+    Update --> Train{Trigger Training?}
+    Train -->|Yes| Training[Run Training Iteration]
+    Train -->|No| Continue[Continue Chatting]
+    Training --> Continue
+    Continue --> Input
+    
+    Feedback -->|No| Continue
+    
+    style Start fill:#6366f1,color:#fff
+    style Response fill:#10b981,color:#fff
+    style Training fill:#f59e0b,color:#fff
+```
+
+### Database Schema
+
+```mermaid
+erDiagram
+    MESSAGES {
+        int id PK
+        string session_id
+        string user_id
+        string role
+        text content
+        text tools_used
+        text skills_applied
+        string trajectory_id
+        string timestamp
+        datetime created_at
+    }
+    
+    SKILLS {
+        string name PK
+        string description
+        string context
+        float success_rate
+        int usage_count
+        float average_reward
+    }
+    
+    TRAJECTORIES {
+        string id PK
+        string query
+        string response
+        float reward
+        array tools_used
+        array relevant_skills
+        string session_id
+    }
+    
+    SESSIONS {
+        string session_id PK
+        string user_id
+        datetime last_activity
+        int message_count
+    }
+    
+    MESSAGES ||--o{ SESSIONS : "belongs to"
+    TRAJECTORIES ||--o{ SESSIONS : "belongs to"
+    TRAJECTORIES }o--|| SKILLS : "uses"
+```
+
+### Deployment Architecture
+
+```mermaid
+graph TB
+    subgraph "Docker Compose"
+        subgraph "Frontend Container"
+            Nginx[Nginx Server<br/>Port 3000]
+            Nginx --> Static[Static Files<br/>HTML/CSS/JS]
+        end
+        
+        subgraph "Backend Container"
+            FastAPI[FastAPI App<br/>Port 8000]
+            FastAPI --> Agent[Agent Core]
+            FastAPI --> DBHelper[DB Helper]
+        end
+    end
+    
+    subgraph "Persistent Storage"
+        Volumes[Volume Mounts]
+        Volumes --> DataDir[./data]
+        DataDir --> Messages[agent.db]
+        DataDir --> Skills[skills.json]
+        DataDir --> Vector[vector_db/]
+    end
+    
+    subgraph "External APIs"
+        FastAPI -->|API Calls| Anthropic[Anthropic API]
+        FastAPI -->|API Calls| OpenAI[OpenAI API]
+        FastAPI -->|Search| DuckDuckGo[DuckDuckGo]
+    end
+    
+    User[User Browser] -->|HTTP| Nginx
+    Nginx -->|Proxy| FastAPI
+    
+    style Nginx fill:#6366f1,color:#fff
+    style FastAPI fill:#8b5cf6,color:#fff
+    style Agent fill:#10b981,color:#fff
+```
+
+### Skill Learning Mindmap
+
+```mermaid
+mindmap
+  root((REFLEX<br/>Skill System))
+    Skill Creation
+      From Feedback
+        User Rates Response
+        High Reward Threshold
+        Extract Pattern
+      Manual Creation
+        User Defines Skill
+        Context & Description
+        Initial Success Rate
+    Skill Storage
+      JSON Format
+        Name & Description
+        Context & Approach
+        Success Metrics
+      Persistence
+        File System
+        Version Control
+    Skill Application
+      Retrieval
+        Keyword Matching
+        Success Rate Ranking
+        Context Similarity
+      Integration
+        Add to Agent Instructions
+        Enhance Query Context
+        Guide Response Generation
+    Skill Evolution
+      Performance Tracking
+        Usage Count
+        Success Rate
+        Average Reward
+      Updates
+        Boost High Performers
+        Decay Low Performers
+        Periodic Re-evaluation
 ```
 
 ## 🔬 How It Works
 
-### 1. Self-Improvement Loop
+### Self-Improvement Loop
 
+```mermaid
+graph LR
+    A[User Query] --> B[Agent Response]
+    B --> C[User Feedback]
+    C --> D[Reward Calculation]
+    D --> E[Skill Update]
+    E --> F[Improved Performance]
+    F --> A
+    
+    style A fill:#6366f1,color:#fff
+    style B fill:#8b5cf6,color:#fff
+    style C fill:#10b981,color:#fff
+    style D fill:#f59e0b,color:#fff
+    style E fill:#ef4444,color:#fff
+    style F fill:#6366f1,color:#fff
 ```
-User Query → Agent Response → Feedback → Skill Update → Improved Performance
-     ↑                                                           │
-     └───────────────────────────────────────────────────────────┘
+
+### RAG Pipeline Flow
+
+```mermaid
+flowchart TD
+    Start([User Question]) --> Embed[Generate Embedding]
+    Embed --> Search[Semantic Search in Vector DB]
+    Search --> Retrieve[Retrieve Top-K Chunks]
+    Retrieve --> Context[Build Context]
+    Context --> LLM[LLM Generation]
+    LLM --> Response[Formatted Response]
+    
+    subgraph "Knowledge Base"
+        Docs[Documents] --> Chunk[Chunking]
+        Chunk --> Embedding[Create Embeddings]
+        Embedding --> VectorDB[(Vector Database)]
+    end
+    
+    VectorDB --> Search
+    
+    style Start fill:#6366f1,color:#fff
+    style Response fill:#10b981,color:#fff
+    style VectorDB fill:#f59e0b,color:#fff
 ```
 
-### 2. RL Training Process
+### Conversation Context Flow
 
-1. **Trajectory Collection**: Store (query, response, reward) tuples
-2. **Advantage Computation**: Use GRPO-style group-relative advantages
-3. **Skill Update**: Boost skills with positive advantages
-4. **Agent Recreation**: Rebuild agent with updated skill context
-
-### 3. RAG Pipeline
-
-1. **Indexing**: Documents → Chunks → Embeddings → Vector DB
-2. **Query**: User question → Embedding
-3. **Retrieval**: Semantic search → Top-k relevant chunks
-4. **Generation**: Context + Query → LLM → Response
-
-### 4. Skill System
-
-- **Extraction**: Successful interactions → Named skills
-- **Storage**: Persistent JSON with metadata
-- **Retrieval**: Keyword matching + success rate ranking
-- **Application**: Add skill context to agent instructions
-- **Evolution**: Update success rates based on outcomes
+```mermaid
+sequenceDiagram
+    participant User
+    participant Frontend
+    participant Backend
+    participant DB
+    participant Agent
+    
+    User->>Frontend: Send Message
+    Frontend->>Backend: POST /api/chat
+    Backend->>DB: Save User Message
+    Backend->>DB: Load Conversation History
+    DB-->>Backend: Previous Messages
+    Backend->>Agent: Query + History Context
+    Agent->>Agent: Process with Context
+    Agent-->>Backend: Contextual Response
+    Backend->>DB: Save Agent Response
+    Backend-->>Frontend: Return Response
+    Frontend-->>User: Display with Markdown
+```
 
 ## 🎨 UI Features
 

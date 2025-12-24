@@ -26,6 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 from agent_core import SelfImprovingResearchAgent, RewardSignal, Skill
+from db_helper import ConversationDB
 from models import (
     ChatRequest,
     ChatResponse,
@@ -49,10 +50,15 @@ elif backend_env.exists():
     logger.info(f"Loaded .env from backend directory: {backend_env}")
 else:
     load_dotenv()  # Try default locations
-    logger.warning("No .env file found, using system environment variables")
+    # Only warn if env vars are not already set (e.g., from Docker)
+    if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY"):
+        logger.warning("No .env file found and no API keys in environment variables")
+    else:
+        logger.info("Using environment variables (no .env file needed)")
 
 # Global agent instance
 agent_instance: Optional[SelfImprovingResearchAgent] = None
+conversation_db: Optional[ConversationDB] = None
 
 
 @asynccontextmanager
@@ -78,6 +84,11 @@ async def lifespan(app: FastAPI):
             openai_api_key=openai_key,
             db_path=str(db_path)
         )
+        
+        # Initialize conversation database
+        global conversation_db
+        conversation_db = ConversationDB(str(db_path))
+        
         logger.info("✅ Agent initialized successfully!")
     except Exception as e:
         logger.error(f"❌ Failed to initialize agent: {e}", exc_info=True)
@@ -148,27 +159,54 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
     try:
+        session_id = request.session_id or "default"
+        user_id = request.user_id or "default_user"
+        
+        # Store user message
+        if conversation_db:
+            conversation_db.save_message(
+                session_id=session_id,
+                user_id=user_id,
+                role="user",
+                content=request.message
+            )
+        
         logger.debug(f"Processing message: {request.message[:100]}...")
         result = agent_instance.run_task(
             query=request.message,
-            session_id=request.session_id or "default",
-            user_id=request.user_id or "default_user"
+            session_id=session_id,
+            user_id=user_id
         )
         
         response_content = result['response'].content
-        logger.info(f"Response generated: length={len(response_content)}, skills_used={len(result.get('relevant_skills', []))}")
+        tools_used = [
+            tool.get("name", "unknown") 
+            for tool in result['trajectory'].get('tools_used', [])
+        ]
+        relevant_skills = [
+            skill.name for skill in result['relevant_skills']
+        ]
+        
+        logger.info(f"Response generated: length={len(response_content)}, skills_used={len(relevant_skills)}")
+        
+        # Store agent response
+        if conversation_db:
+            conversation_db.save_message(
+                session_id=session_id,
+                user_id=user_id,
+                role="agent",
+                content=response_content,
+                tools_used=tools_used,
+                skills_applied=relevant_skills,
+                trajectory_id=session_id
+            )
         
         return ChatResponse(
             message=response_content,
-            session_id=request.session_id or "default",
-            trajectory_id=request.session_id or "default",
-            tools_used=[
-                tool.get("name", "unknown") 
-                for tool in result['trajectory'].get('tools_used', [])
-            ],
-            relevant_skills=[
-                skill.name for skill in result['relevant_skills']
-            ],
+            session_id=session_id,
+            trajectory_id=session_id,
+            tools_used=tools_used,
+            relevant_skills=relevant_skills,
             timestamp=datetime.now().isoformat()
         )
         
@@ -194,6 +232,22 @@ async def chat_stream(
     
     async def event_generator():
         try:
+            # Store user message
+            if conversation_db:
+                conversation_db.save_message(
+                    session_id=session_id,
+                    user_id=user_id,
+                    role="user",
+                    content=message
+                )
+            
+            # Send status updates
+            yield f"data: {json.dumps({'type': 'status', 'status': 'thinking', 'message': 'Analyzing your question...'})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            yield f"data: {json.dumps({'type': 'status', 'status': 'searching', 'message': 'Searching for information...'})}\n\n"
+            await asyncio.sleep(0.1)
+            
             logger.debug(f"Starting stream for message: {message[:100]}...")
             # Run agent and get response
             result = agent_instance.run_task(
@@ -203,27 +257,45 @@ async def chat_stream(
             )
             
             response_content = result['response'].content
+            tools_used = [
+                tool.get("name", "unknown") 
+                for tool in result['trajectory'].get('tools_used', [])
+            ]
+            relevant_skills = [
+                skill.name for skill in result['relevant_skills']
+            ]
             
-            # Stream response word by word for demo effect
+            # Store agent response
+            if conversation_db:
+                conversation_db.save_message(
+                    session_id=session_id,
+                    user_id=user_id,
+                    role="agent",
+                    content=response_content,
+                    tools_used=tools_used,
+                    skills_applied=relevant_skills,
+                    trajectory_id=session_id
+                )
+            
+            yield f"data: {json.dumps({'type': 'status', 'status': 'responding', 'message': 'Generating response...'})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            # Stream response word by word
             words = response_content.split()
             for i, word in enumerate(words):
                 chunk_data = {
+                    "type": "content",
                     "content": word + " ",
                     "done": i == len(words) - 1,
-                    "tools_used": [
-                        tool.get("name", "unknown") 
-                        for tool in result['trajectory'].get('tools_used', [])
-                    ] if i == len(words) - 1 else [],
-                    "relevant_skills": [
-                        skill.name for skill in result['relevant_skills']
-                    ] if i == len(words) - 1 else []
+                    "tools_used": tools_used if i == len(words) - 1 else [],
+                    "relevant_skills": relevant_skills if i == len(words) - 1 else []
                 }
                 
                 yield f"data: {json.dumps(chunk_data)}\n\n"
                 await asyncio.sleep(0.05)  # Simulate streaming delay
             
             # Send final message
-            yield f"data: {json.dumps({'done': True})}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'done': True})}\n\n"
             
         except Exception as e:
             logger.error(f"Error in stream generator: {str(e)}", exc_info=True)
@@ -463,19 +535,49 @@ async def get_stats():
         raise HTTPException(status_code=500, detail=f"Stats error: {str(e)}")
 
 
-@app.get("/api/sessions")
-async def list_sessions(limit: int = Query(20, description="Number of sessions")):
+@app.get("/api/chat/history")
+async def get_chat_history(
+    session_id: str = Query(..., description="Session ID"),
+    limit: Optional[int] = Query(None, description="Maximum number of messages")
+):
     """
-    List recent sessions (simplified implementation)
+    Get conversation history for a session
     """
-    if not agent_instance:
-        raise HTTPException(status_code=503, detail="Agent not initialized")
+    if not conversation_db:
+        raise HTTPException(status_code=503, detail="Conversation database not initialized")
     
-    # This is simplified - in production, query database
-    return {
-        "sessions": [],
-        "message": "Session listing not yet implemented in this POC"
-    }
+    try:
+        messages = conversation_db.get_conversation_history(session_id, limit)
+        return {
+            "session_id": session_id,
+            "messages": messages,
+            "count": len(messages)
+        }
+    except Exception as e:
+        logger.error(f"Error retrieving chat history: {e}")
+        raise HTTPException(status_code=500, detail=f"History error: {str(e)}")
+
+
+@app.get("/api/sessions")
+async def list_sessions(
+    user_id: Optional[str] = Query(None, description="Filter by user ID"),
+    limit: int = Query(20, description="Number of sessions")
+):
+    """
+    List recent sessions
+    """
+    if not conversation_db:
+        raise HTTPException(status_code=503, detail="Conversation database not initialized")
+    
+    try:
+        sessions = conversation_db.get_all_sessions(user_id)
+        return {
+            "sessions": sessions[:limit],
+            "total": len(sessions)
+        }
+    except Exception as e:
+        logger.error(f"Error listing sessions: {e}")
+        raise HTTPException(status_code=500, detail=f"Sessions error: {str(e)}")
 
 
 if __name__ == "__main__":
