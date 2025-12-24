@@ -6,6 +6,7 @@ Updated for Agno v2 December 2025
 import os
 import json
 import logging
+import re
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 import numpy as np
@@ -742,8 +743,6 @@ class SelfImprovingResearchAgent:
                     
                     # Yield content if we have it (filter out status-like messages and internal details)
                     if content_to_yield:
-                        import re
-                        
                         # Filter out common status messages that should be shown as status, not content
                         status_patterns = [
                             r"^I'll search.*",
