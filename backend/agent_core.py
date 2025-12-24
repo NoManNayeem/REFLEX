@@ -762,8 +762,15 @@ class SelfImprovingResearchAgent:
                             continue
                         
                         # Filter out patterns that look like internal reasoning
-                        if re.search(r'^[^:]+:\s*(search|find|look)', content_to_yield.strip(), re.IGNORECASE):
+                        # Match patterns like "details about X: search..." or "X: search..."
+                        if re.search(r'^[^:]+:\s*(search|find|look|get)', content_to_yield.strip(), re.IGNORECASE):
                             # Looks like internal reasoning format "topic: search..."
+                            logger.debug(f"Filtered out internal reasoning: {content_to_yield[:50]}...")
+                            continue
+                        
+                        # Filter out content that starts with reasoning-like patterns
+                        if re.match(r'^(details about|information about|let me|I will|I\'ll).*:\s*(search|find)', content_to_yield.strip(), re.IGNORECASE):
+                            logger.debug(f"Filtered out reasoning pattern: {content_to_yield[:50]}...")
                             continue
                         
                         if not is_status_message:
