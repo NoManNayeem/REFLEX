@@ -72,7 +72,15 @@ const elements = {
     
     // Conversations
     newChatBtn: document.getElementById('newChatBtn'),
-    conversationsList: document.getElementById('conversationsList')
+    conversationsList: document.getElementById('conversationsList'),
+    
+    // Knowledge Base
+    addKnowledgeBtn: document.getElementById('addKnowledgeBtn'),
+    knowledgeUrl: document.getElementById('knowledgeUrl'),
+    knowledgeSourcesList: document.getElementById('knowledgeSourcesList'),
+    knowledgeStatus: document.getElementById('knowledgeStatus'),
+    reloadKnowledgeBtn: document.getElementById('reloadKnowledgeBtn'),
+    clearKnowledgeBtn: document.getElementById('clearKnowledgeBtn')
 };
 
 // Initialize application
@@ -169,10 +177,27 @@ function init() {
     loadConversations();
     loadChatHistory();
     
+    // Load knowledge base
+    loadKnowledgeBase();
+    
     // New chat button
     if (elements.newChatBtn) {
         elements.newChatBtn.addEventListener('click', createNewConversation);
     }
+    
+    // Knowledge base handlers
+    if (elements.addKnowledgeBtn) {
+        elements.addKnowledgeBtn.addEventListener('click', addKnowledgeSource);
+    }
+    if (elements.reloadKnowledgeBtn) {
+        elements.reloadKnowledgeBtn.addEventListener('click', reloadKnowledgeBase);
+    }
+    if (elements.clearKnowledgeBtn) {
+        elements.clearKnowledgeBtn.addEventListener('click', clearKnowledgeBase);
+    }
+    
+    // Load knowledge base on init
+    loadKnowledgeBase();
     
     // Help panel toggle
     if (elements.helpBtn) {
@@ -807,7 +832,17 @@ function updateStreamingMessage(id, content) {
     if (messageDiv) {
         const textDiv = messageDiv.querySelector('.streaming-text');
         if (textDiv) {
-            textDiv.innerHTML = formatMessage(content);
+            // During streaming, render as plain text with basic formatting
+            // This prevents markdown rendering issues with incomplete content
+            // Full markdown will be rendered when streaming completes
+            const escaped = escapeHtml(content);
+            const basicFormatted = escaped
+                .replace(/\n/g, '<br>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            textDiv.innerHTML = basicFormatted;
+            
             // Auto-scroll to bottom
             elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
         }
@@ -1113,6 +1148,206 @@ function toggleTheme() {
 function updateThemeIcon() {
     const icon = elements.themeToggle.querySelector('i');
     icon.className = state.currentTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+}
+
+// Knowledge Base Management
+async function loadKnowledgeBase() {
+    try {
+        const response = await fetch(`${API_BASE}/knowledge`);
+        if (!response.ok) {
+            if (elements.knowledgeStatus) {
+                updateKnowledgeStatus(false, 'Knowledge base not available');
+            }
+            if (elements.knowledgeSourcesList) {
+                elements.knowledgeSourcesList.innerHTML = '<p class="empty-state">Knowledge base not configured</p>';
+            }
+            return;
+        }
+        
+        const data = await response.json();
+        if (elements.knowledgeStatus) {
+            updateKnowledgeStatus(data.enabled, data.enabled ? 'Active' : 'Disabled');
+        }
+        if (elements.knowledgeSourcesList) {
+            renderKnowledgeSources(data.urls || []);
+        }
+    } catch (error) {
+        console.error('Error loading knowledge base:', error);
+        if (elements.knowledgeStatus) {
+            updateKnowledgeStatus(false, 'Error loading knowledge base');
+        }
+        if (elements.knowledgeSourcesList) {
+            elements.knowledgeSourcesList.innerHTML = '<p class="empty-state">Error loading knowledge base</p>';
+        }
+    }
+}
+
+function updateKnowledgeStatus(enabled, message) {
+    if (!elements.knowledgeStatus) return;
+    
+    const indicator = elements.knowledgeStatus.querySelector('.status-indicator');
+    if (indicator) {
+        indicator.innerHTML = `
+            <i class="fas fa-circle ${enabled ? 'active' : ''}"></i>
+            <span>${message}</span>
+        `;
+    }
+}
+
+function renderKnowledgeSources(urls) {
+    if (!elements.knowledgeSourcesList) return;
+    
+    if (urls.length === 0) {
+        elements.knowledgeSourcesList.innerHTML = '<p class="empty-state">No knowledge sources added yet</p>';
+        return;
+    }
+    
+    elements.knowledgeSourcesList.innerHTML = urls.map((url) => `
+        <div class="source-item">
+            <div class="source-content">
+                <i class="fas fa-link"></i>
+                <span class="source-url">${escapeHtml(url)}</span>
+            </div>
+            <button class="source-action-btn" onclick="removeKnowledgeSource('${escapeHtml(url)}')" title="Remove">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+async function addKnowledgeSource() {
+    const url = elements.knowledgeUrl?.value.trim();
+    if (!url) {
+        alert('Please enter a valid URL');
+        return;
+    }
+    
+    try {
+        elements.addKnowledgeBtn.disabled = true;
+        elements.addKnowledgeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+        
+        const response = await fetch(`${API_BASE}/knowledge/urls`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to add URL');
+        }
+        
+        elements.knowledgeUrl.value = '';
+        await loadKnowledgeBase();
+        showNotification('Knowledge source added successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error adding knowledge source:', error);
+        alert('Failed to add knowledge source: ' + error.message);
+    } finally {
+        elements.addKnowledgeBtn.disabled = false;
+        elements.addKnowledgeBtn.innerHTML = '<i class="fas fa-plus"></i> Add URL';
+    }
+}
+
+async function removeKnowledgeSource(url) {
+    if (!confirm(`Are you sure you want to remove this knowledge source?\n${url}`)) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/knowledge/urls`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        });
+        
+        if (!response.ok) throw new Error('Failed to remove URL');
+        
+        await loadKnowledgeBase();
+        showNotification('Knowledge source removed', 'success');
+        
+    } catch (error) {
+        console.error('Error removing knowledge source:', error);
+        alert('Failed to remove knowledge source: ' + error.message);
+    }
+}
+
+async function reloadKnowledgeBase() {
+    if (!confirm('This will reload all knowledge sources. This may take a while. Continue?')) return;
+    
+    try {
+        elements.reloadKnowledgeBtn.disabled = true;
+        elements.reloadKnowledgeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reloading...';
+        
+        const response = await fetch(`${API_BASE}/knowledge/reload`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) throw new Error('Failed to reload knowledge base');
+        
+        showNotification('Knowledge base reloaded successfully!', 'success');
+        await loadKnowledgeBase();
+        
+    } catch (error) {
+        console.error('Error reloading knowledge base:', error);
+        alert('Failed to reload knowledge base: ' + error.message);
+    } finally {
+        elements.reloadKnowledgeBtn.disabled = false;
+        elements.reloadKnowledgeBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Reload Knowledge Base';
+    }
+}
+
+async function clearKnowledgeBase() {
+    if (!confirm('Are you sure you want to clear all knowledge sources? This cannot be undone.')) return;
+    
+    try {
+        elements.clearKnowledgeBtn.disabled = true;
+        elements.clearKnowledgeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
+        
+        const response = await fetch(`${API_BASE}/knowledge/clear`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) throw new Error('Failed to clear knowledge base');
+        
+        showNotification('Knowledge base cleared', 'success');
+        await loadKnowledgeBase();
+        
+    } catch (error) {
+        console.error('Error clearing knowledge base:', error);
+        alert('Failed to clear knowledge base: ' + error.message);
+    } finally {
+        elements.clearKnowledgeBtn.disabled = false;
+        elements.clearKnowledgeBtn.innerHTML = '<i class="fas fa-trash"></i> Clear All';
+    }
+}
+
+// Make removeKnowledgeSource available globally
+window.removeKnowledgeSource = removeKnowledgeSource;
+
+// Show notification
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#6366f1'};
+        color: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        animation: slideIn 0.3s ease;
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
 }
 
 // Initialize when DOM is ready

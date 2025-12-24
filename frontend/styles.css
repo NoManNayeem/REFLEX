@@ -48,9 +48,9 @@ body {
 
 .app-container {
     display: grid;
-    grid-template-columns: 240px 280px 1fr 320px;
+    grid-template-columns: 260px 300px 1fr 340px;
     height: 100vh;
-    gap: 1px;
+    gap: 0;
     background: var(--border);
 }
 
@@ -61,11 +61,16 @@ body {
     flex-direction: column;
     overflow: hidden;
     border-right: 1px solid var(--border);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    min-width: 240px;
+    max-width: 240px;
 }
 
 .conversations-header {
     padding: 1rem;
     border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+    flex-shrink: 0;
 }
 
 .new-chat-btn {
@@ -98,9 +103,9 @@ body {
 }
 
 .conversation-item {
-    padding: 0.75rem;
-    margin-bottom: 0.25rem;
-    border-radius: var(--radius-sm);
+    padding: 0.875rem;
+    margin: 0.25rem 0.5rem;
+    border-radius: var(--radius);
     cursor: pointer;
     transition: var(--transition);
     display: flex;
@@ -108,6 +113,7 @@ body {
     justify-content: space-between;
     gap: 0.5rem;
     border: 1px solid transparent;
+    position: relative;
 }
 
 .conversation-item:hover {
@@ -193,14 +199,21 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    border-right: 1px solid var(--border);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+    min-width: 280px;
+    max-width: 280px;
 }
 
 .sidebar-header {
-    padding: 1.5rem;
+    padding: 1.25rem 1rem;
     border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background: var(--bg-secondary);
+    backdrop-filter: blur(10px);
+    flex-shrink: 0;
 }
 
 .logo {
@@ -238,10 +251,11 @@ body {
 .sidebar-content {
     flex: 1;
     overflow-y: auto;
-    padding: 1.5rem;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
+    min-height: 0; /* Important for flex scrolling */
 }
 
 .stats-card {
@@ -1321,6 +1335,187 @@ input[type="range"]::-webkit-slider-thumb:hover {
 /* Smooth transitions for theme changes */
 * {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Knowledge Base Styles */
+.knowledge-base-section {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.knowledge-status {
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+}
+
+.status-indicator i {
+    font-size: 0.5rem;
+    color: var(--text-tertiary);
+}
+
+.status-indicator i.active {
+    color: var(--success);
+    animation: pulse 2s infinite;
+}
+
+.add-knowledge-form {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.add-knowledge-form h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-primary);
+}
+
+.add-knowledge-form .form-group {
+    margin-bottom: 0.75rem;
+}
+
+.add-knowledge-form .form-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.add-knowledge-form .form-group small {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.knowledge-sources {
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+}
+
+.knowledge-sources h4 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-primary);
+}
+
+.sources-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.source-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem;
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    transition: var(--transition);
+}
+
+.source-item:hover {
+    border-color: var(--primary);
+}
+
+.source-content {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.source-content i {
+    color: var(--primary);
+    flex-shrink: 0;
+}
+
+.source-url {
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.source-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+    flex-shrink: 0;
+}
+
+.source-action-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--danger);
+}
+
+.knowledge-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.action-btn {
+    padding: 0.75rem 1rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    color: var(--text-primary);
+}
+
+.action-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--primary);
+}
+
+.action-btn.danger {
+    color: var(--danger);
+}
+
+.action-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: var(--danger);
 }
 
 /* Responsive */

@@ -168,6 +168,9 @@
                 <button class="tab-btn" data-tab="trajectory">
                     <i class="fas fa-route"></i> Trajectory
                 </button>
+                <button class="tab-btn" data-tab="knowledge">
+                    <i class="fas fa-database"></i> Knowledge
+                </button>
             </div>
 
             <div class="panel-content">
@@ -256,6 +259,51 @@
                                 <p><strong>Session ID:</strong> <span id="sessionId">-</span></p>
                                 <p><strong>Messages:</strong> <span id="messageCount">0</span></p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Knowledge Base Tab -->
+                <div class="tab-pane" id="knowledgeTab">
+                    <h3>Knowledge Base (RAG)</h3>
+                    <p class="tab-description">Manage your knowledge base sources. The agent will use these for retrieval-augmented generation.</p>
+                    
+                    <div class="knowledge-base-section">
+                        <div class="knowledge-status" id="knowledgeStatus">
+                            <div class="status-indicator">
+                                <i class="fas fa-circle"></i>
+                                <span>Loading...</span>
+                            </div>
+                        </div>
+
+                        <div class="add-knowledge-form">
+                            <h4><i class="fas fa-plus-circle"></i> Add Knowledge Source</h4>
+                            <div class="form-group">
+                                <label>
+                                    <i class="fas fa-link"></i> URL
+                                </label>
+                                <input type="url" id="knowledgeUrl" placeholder="https://example.com" class="form-input">
+                                <small>Add a website URL to index for RAG</small>
+                            </div>
+                            <button id="addKnowledgeBtn" class="submit-btn">
+                                <i class="fas fa-plus"></i> Add URL
+                            </button>
+                        </div>
+
+                        <div class="knowledge-sources">
+                            <h4><i class="fas fa-list"></i> Knowledge Sources</h4>
+                            <div id="knowledgeSourcesList" class="sources-list">
+                                <p class="empty-state">Loading sources...</p>
+                            </div>
+                        </div>
+
+                        <div class="knowledge-actions">
+                            <button id="reloadKnowledgeBtn" class="action-btn">
+                                <i class="fas fa-sync-alt"></i> Reload Knowledge Base
+                            </button>
+                            <button id="clearKnowledgeBtn" class="action-btn danger">
+                                <i class="fas fa-trash"></i> Clear All
+                            </button>
                         </div>
                     </div>
                 </div>

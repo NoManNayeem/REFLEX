@@ -600,6 +600,127 @@ async def list_sessions(
         raise HTTPException(status_code=500, detail=f"Sessions error: {str(e)}")
 
 
+# Knowledge Base Management Endpoints
+@app.get("/api/knowledge")
+async def get_knowledge_base():
+    """
+    Get knowledge base status and URLs
+    """
+    if not agent_instance:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    try:
+        enabled = agent_instance.knowledge is not None
+        urls = agent_instance.knowledge_urls if agent_instance.knowledge_urls else []
+        
+        return {
+            "enabled": enabled,
+            "urls": urls,
+            "count": len(urls)
+        }
+    except Exception as e:
+        logger.error(f"Error getting knowledge base: {e}")
+        raise HTTPException(status_code=500, detail=f"Knowledge base error: {str(e)}")
+
+
+@app.post("/api/knowledge/urls")
+async def add_knowledge_url(request: Dict[str, str]):
+    """
+    Add a URL to the knowledge base
+    """
+    if not agent_instance:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    url = request.get('url')
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    
+    try:
+        success = agent_instance.add_knowledge_url(url)
+        if success:
+            return {
+                "status": "success",
+                "message": f"URL added successfully: {url}",
+                "urls": agent_instance.knowledge_urls
+            }
+        else:
+            raise HTTPException(status_code=400, detail="URL already exists or failed to add")
+    except Exception as e:
+        logger.error(f"Error adding knowledge URL: {e}")
+        raise HTTPException(status_code=500, detail=f"Error adding URL: {str(e)}")
+
+
+@app.delete("/api/knowledge/urls")
+async def remove_knowledge_url(request: Dict[str, str]):
+    """
+    Remove a URL from the knowledge base
+    """
+    if not agent_instance:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    url = request.get('url')
+    if not url:
+        raise HTTPException(status_code=400, detail="URL is required")
+    
+    try:
+        success = agent_instance.remove_knowledge_url(url)
+        if success:
+            return {
+                "status": "success",
+                "message": f"URL removed successfully: {url}",
+                "urls": agent_instance.knowledge_urls
+            }
+        else:
+            raise HTTPException(status_code=404, detail="URL not found")
+    except Exception as e:
+        logger.error(f"Error removing knowledge URL: {e}")
+        raise HTTPException(status_code=500, detail=f"Error removing URL: {str(e)}")
+
+
+@app.post("/api/knowledge/reload")
+async def reload_knowledge_base():
+    """
+    Reload the knowledge base
+    """
+    if not agent_instance:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    try:
+        success = agent_instance.reload_knowledge_base()
+        if success:
+            return {
+                "status": "success",
+                "message": "Knowledge base reloaded successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Failed to reload knowledge base")
+    except Exception as e:
+        logger.error(f"Error reloading knowledge base: {e}")
+        raise HTTPException(status_code=500, detail=f"Error reloading: {str(e)}")
+
+
+@app.post("/api/knowledge/clear")
+async def clear_knowledge_base():
+    """
+    Clear all knowledge base URLs
+    """
+    if not agent_instance:
+        raise HTTPException(status_code=503, detail="Agent not initialized")
+    
+    try:
+        success = agent_instance.clear_knowledge_base()
+        if success:
+            return {
+                "status": "success",
+                "message": "Knowledge base cleared successfully"
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Failed to clear knowledge base")
+    except Exception as e:
+        logger.error(f"Error clearing knowledge base: {e}")
+        raise HTTPException(status_code=500, detail=f"Error clearing: {str(e)}")
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",

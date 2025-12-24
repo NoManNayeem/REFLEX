@@ -238,24 +238,32 @@ class SelfImprovingResearchAgent:
         
         # Setup knowledge base (optional - can be None for POC)
         self.knowledge = None
+        self.knowledge_urls = []  # Store URLs for knowledge base
+        self.lancedb_path = os.path.join(os.getcwd(), "data", "db", "lancedb")
+        
+        # Load saved URLs from file
+        self._load_knowledge_urls()
+        
         if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder:
             try:
                 logger.info("Initializing knowledge base with LanceDB...")
-                lancedb_path = os.path.join(os.getcwd(), "data", "db", "lancedb")
-                self.knowledge = WebsiteKnowledgeBase(
-                    urls=["https://docs.agno.com/"],
-                    vector_db=LanceDb(
-                        uri=lancedb_path,
-                        table_name="research_docs",
-                        search_type=SearchType.hybrid,
-                        embedder=OpenAIEmbedder(
-                            id="text-embedding-3-small",
-                            dimensions=1536,
-                            api_key=self.openai_api_key
+                if self.knowledge_urls:
+                    self.knowledge = WebsiteKnowledgeBase(
+                        urls=self.knowledge_urls,
+                        vector_db=LanceDb(
+                            uri=self.lancedb_path,
+                            table_name="research_docs",
+                            search_type=SearchType.hybrid,
+                            embedder=OpenAIEmbedder(
+                                id="text-embedding-3-small",
+                                dimensions=1536,
+                                api_key=self.openai_api_key
+                            )
                         )
                     )
-                )
-                logger.info("Knowledge base initialized successfully")
+                    logger.info(f"Knowledge base initialized with {len(self.knowledge_urls)} URLs")
+                else:
+                    logger.info("Knowledge base initialized but no URLs configured")
             except Exception as e:
                 logger.warning(f"Knowledge base not initialized: {e}")
                 self.knowledge = None
@@ -267,15 +275,123 @@ class SelfImprovingResearchAgent:
         
         # Create the main agent
         self.agent = self._create_agent()
-        
-        # Try to load knowledge base (comment out after first run)
-        if self.knowledge:
+    
+    def _load_knowledge_urls(self):
+        """Load knowledge base URLs from file"""
+        urls_file = os.path.join(os.getcwd(), "data", "knowledge_urls.json")
+        try:
+            if os.path.exists(urls_file):
+                with open(urls_file, 'r') as f:
+                    data = json.load(f)
+                    self.knowledge_urls = data.get('urls', [])
+                    logger.info(f"Loaded {len(self.knowledge_urls)} knowledge base URLs")
+            else:
+                # Default URL
+                self.knowledge_urls = ["https://docs.agno.com/"]
+                self._save_knowledge_urls()
+        except Exception as e:
+            logger.warning(f"Error loading knowledge URLs: {e}")
+            self.knowledge_urls = []
+    
+    def _save_knowledge_urls(self):
+        """Save knowledge base URLs to file"""
+        urls_file = os.path.join(os.getcwd(), "data", "knowledge_urls.json")
+        try:
+            os.makedirs(os.path.dirname(urls_file), exist_ok=True)
+            with open(urls_file, 'w') as f:
+                json.dump({'urls': self.knowledge_urls}, f, indent=2)
+            logger.debug(f"Saved {len(self.knowledge_urls)} knowledge base URLs")
+        except Exception as e:
+            logger.error(f"Error saving knowledge URLs: {e}")
+    
+    def add_knowledge_url(self, url: str) -> bool:
+        """Add a URL to the knowledge base"""
+        if url not in self.knowledge_urls:
+            self.knowledge_urls.append(url)
+            self._save_knowledge_urls()
+            
+            # Reinitialize knowledge base if available
+            if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder:
+                try:
+                    self.knowledge = WebsiteKnowledgeBase(
+                        urls=self.knowledge_urls,
+                        vector_db=LanceDb(
+                            uri=self.lancedb_path,
+                            table_name="research_docs",
+                            search_type=SearchType.hybrid,
+                            embedder=OpenAIEmbedder(
+                                id="text-embedding-3-small",
+                                dimensions=1536,
+                                api_key=self.openai_api_key
+                            )
+                        )
+                    )
+                    # Reload agent with new knowledge
+                    self.agent = self._create_agent()
+                    logger.info(f"Added URL to knowledge base: {url}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Error reinitializing knowledge base: {e}")
+                    return False
+            return True
+        return False
+    
+    def remove_knowledge_url(self, url: str) -> bool:
+        """Remove a URL from the knowledge base"""
+        if url in self.knowledge_urls:
+            self.knowledge_urls.remove(url)
+            self._save_knowledge_urls()
+            
+            # Reinitialize knowledge base
+            if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder:
+                try:
+                    if self.knowledge_urls:
+                        self.knowledge = WebsiteKnowledgeBase(
+                            urls=self.knowledge_urls,
+                            vector_db=LanceDb(
+                                uri=self.lancedb_path,
+                                table_name="research_docs",
+                                search_type=SearchType.hybrid,
+                                embedder=OpenAIEmbedder(
+                                    id="text-embedding-3-small",
+                                    dimensions=1536,
+                                    api_key=self.openai_api_key
+                                )
+                            )
+                        )
+                    else:
+                        self.knowledge = None
+                    # Reload agent
+                    self.agent = self._create_agent()
+                    logger.info(f"Removed URL from knowledge base: {url}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Error reinitializing knowledge base: {e}")
+                    return False
+            return True
+        return False
+    
+    def reload_knowledge_base(self) -> bool:
+        """Reload the knowledge base"""
+        if self.knowledge and self.knowledge_urls:
             try:
-                logger.info("Loading knowledge base data...")
+                logger.info("Reloading knowledge base...")
                 self.knowledge.load(upsert=True)
-                logger.info("Knowledge base data loaded")
+                logger.info("Knowledge base reloaded successfully")
+                return True
             except Exception as e:
-                logger.info(f"Knowledge base load info: {e}")
+                logger.error(f"Error reloading knowledge base: {e}")
+                return False
+        return False
+    
+    def clear_knowledge_base(self) -> bool:
+        """Clear all knowledge base URLs"""
+        self.knowledge_urls = []
+        self._save_knowledge_urls()
+        self.knowledge = None
+        self.agent = self._create_agent()
+        logger.info("Knowledge base cleared")
+        return True
     
     def _create_agent(self) -> Agent:
         """Create the research agent with all capabilities"""
