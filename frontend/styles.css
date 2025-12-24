@@ -1265,6 +1265,24 @@ input[type="range"]::-webkit-slider-thumb:hover {
     animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Streaming message styles */
+.message.streaming {
+    position: relative;
+}
+
+.message.streaming .streaming-text::after {
+    content: '▋';
+    display: inline-block;
+    animation: blink 1s infinite;
+    color: var(--primary);
+    margin-left: 2px;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0; }
+}
+
 @keyframes fadeInUp {
     from {
         opacity: 0;

@@ -494,7 +494,7 @@ function updateConversationInSidebar() {
     }
 }
 
-// Send message to agent
+// Send message to agent with streaming
 async function sendMessage() {
     const message = elements.messageInput.value.trim();
     if (!message) return;
@@ -513,12 +513,14 @@ async function sendMessage() {
     // Show loading with activity updates
     const loadingId = addLoadingMessage('Analyzing your question...');
     
-    // Simulate activity updates (in real implementation, use SSE for real-time updates)
-    setTimeout(() => updateLoadingStatus(loadingId, 'Searching for information...'), 500);
-    setTimeout(() => updateLoadingStatus(loadingId, 'Generating response...'), 1500);
+    // Create agent message container for streaming
+    let agentMessageId = null;
+    let accumulatedContent = '';
+    let toolsUsed = [];
+    let relevantSkills = [];
     
     try {
-        const response = await fetch(`${API_BASE}/chat`, {
+        const response = await fetch(`${API_BASE}/chat/stream`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -530,40 +532,103 @@ async function sendMessage() {
         
         if (!response.ok) throw new Error('Failed to get response');
         
-        const data = await response.json();
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
         
-        // Remove loading
-        removeLoadingMessage(loadingId);
-        
-        // Add agent message with markdown rendering
-        addMessage('agent', data.message, {
-            tools: data.tools_used,
-            skills: data.relevant_skills
-        });
-        
-        // Update trajectory
-        state.lastTrajectory = data;
-        updateTrajectoryInfo(data);
-        
-        // Update message count
-        state.messageCount++;
-        elements.messageCountDisplay.textContent = state.messageCount;
-        
-        // Update conversation title if this is the first message
-        if (state.messageCount === 1) {
-            updateConversationTitle(message);
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.type === 'status') {
+                            // Update loading status
+                            updateLoadingStatus(loadingId, data.message);
+                        } else if (data.type === 'content') {
+                            // Remove loading message on first content
+                            if (!agentMessageId) {
+                                removeLoadingMessage(loadingId);
+                                agentMessageId = addStreamingMessage('agent', '');
+                            }
+                            
+                            // Accumulate content
+                            accumulatedContent += data.content;
+                            
+                            // Update streaming message
+                            updateStreamingMessage(agentMessageId, accumulatedContent);
+                        } else if (data.type === 'done') {
+                            // Finalize message
+                            toolsUsed = data.tools_used || [];
+                            relevantSkills = data.relevant_skills || [];
+                            
+                            // Replace streaming message with final message
+                            if (agentMessageId) {
+                                replaceStreamingMessage(agentMessageId, accumulatedContent, {
+                                    tools: toolsUsed,
+                                    skills: relevantSkills
+                                });
+                            } else {
+                                // Fallback: create message if streaming didn't work
+                                removeLoadingMessage(loadingId);
+                                addMessage('agent', accumulatedContent, {
+                                    tools: toolsUsed,
+                                    skills: relevantSkills
+                                });
+                            }
+                            
+                            // Update trajectory
+                            state.lastTrajectory = {
+                                message: accumulatedContent,
+                                tools_used: toolsUsed,
+                                relevant_skills: relevantSkills
+                            };
+                            updateTrajectoryInfo(state.lastTrajectory);
+                            
+                            // Update message count
+                            state.messageCount++;
+                            elements.messageCountDisplay.textContent = state.messageCount;
+                            
+                            // Update conversation title if this is the first message
+                            if (state.messageCount === 1) {
+                                updateConversationTitle(message);
+                            }
+                            
+                            // Update conversation in sidebar
+                            updateConversationInSidebar();
+                            
+                            // Update stats
+                            updateStats();
+                        } else if (data.type === 'error') {
+                            // Handle error
+                            removeLoadingMessage(loadingId);
+                            if (agentMessageId) {
+                                replaceStreamingMessage(agentMessageId, `Error: ${data.error}`, { error: true });
+                            } else {
+                                addMessage('agent', `Error: ${data.error}`, { error: true });
+                            }
+                        }
+                    } catch (parseError) {
+                        console.warn('Failed to parse SSE data:', parseError, line);
+                    }
+                }
+            }
         }
-        
-        // Update conversation in sidebar
-        updateConversationInSidebar();
-        
-        // Update stats
-        updateStats();
         
     } catch (error) {
         console.error('Error:', error);
         removeLoadingMessage(loadingId);
-        addMessage('agent', 'Sorry, I encountered an error. Please try again.', { error: true });
+        if (agentMessageId) {
+            replaceStreamingMessage(agentMessageId, 'Sorry, I encountered an error. Please try again.', { error: true });
+        } else {
+            addMessage('agent', 'Sorry, I encountered an error. Please try again.', { error: true });
+        }
     } finally {
         elements.sendBtn.disabled = false;
         elements.messageInput.disabled = false;
@@ -694,6 +759,99 @@ function updateLoadingStatus(id, statusText) {
 function removeLoadingMessage(id) {
     const loadingMsg = document.getElementById(id);
     if (loadingMsg) loadingMsg.remove();
+}
+
+// Add streaming message (for real-time updates)
+function addStreamingMessage(type, initialContent) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${type} streaming`;
+    const id = `streaming_${Date.now()}`;
+    messageDiv.id = id;
+    
+    // Add fade-in animation
+    messageDiv.style.opacity = '0';
+    messageDiv.style.transform = 'translateY(10px)';
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.innerHTML = type === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    const textDiv = document.createElement('div');
+    textDiv.className = 'message-text streaming-text';
+    textDiv.innerHTML = formatMessage(initialContent);
+    
+    contentDiv.appendChild(textDiv);
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    
+    elements.chatMessages.appendChild(messageDiv);
+    
+    // Animate in
+    requestAnimationFrame(() => {
+        messageDiv.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+        messageDiv.style.opacity = '1';
+        messageDiv.style.transform = 'translateY(0)';
+    });
+    
+    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    
+    return id;
+}
+
+// Update streaming message content
+function updateStreamingMessage(id, content) {
+    const messageDiv = document.getElementById(id);
+    if (messageDiv) {
+        const textDiv = messageDiv.querySelector('.streaming-text');
+        if (textDiv) {
+            textDiv.innerHTML = formatMessage(content);
+            // Auto-scroll to bottom
+            elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+        }
+    }
+}
+
+// Replace streaming message with final message (adds metadata)
+function replaceStreamingMessage(id, content, meta = {}) {
+    const messageDiv = document.getElementById(id);
+    if (!messageDiv) return;
+    
+    // Remove streaming class
+    messageDiv.classList.remove('streaming');
+    
+    // Update content
+    const textDiv = messageDiv.querySelector('.streaming-text');
+    if (textDiv) {
+        textDiv.classList.remove('streaming-text');
+        textDiv.innerHTML = formatMessage(content);
+    }
+    
+    // Add metadata if provided
+    const contentDiv = messageDiv.querySelector('.message-content');
+    if (contentDiv && (meta.tools || meta.skills)) {
+        // Remove existing meta if any
+        const existingMeta = contentDiv.querySelector('.message-meta');
+        if (existingMeta) existingMeta.remove();
+        
+        const metaDiv = document.createElement('div');
+        metaDiv.className = 'message-meta';
+        
+        if (meta.tools && meta.tools.length > 0) {
+            metaDiv.innerHTML += `<span><i class="fas fa-tools"></i> ${meta.tools.join(', ')}</span>`;
+        }
+        
+        if (meta.skills && meta.skills.length > 0) {
+            metaDiv.innerHTML += `<span><i class="fas fa-lightbulb"></i> ${meta.skills.join(', ')}</span>`;
+        }
+        
+        contentDiv.appendChild(metaDiv);
+    }
+    
+    // Scroll to bottom
+    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
 }
 
 // Update stats

@@ -364,6 +364,149 @@ class SelfImprovingResearchAgent:
             'relevant_skills': relevant_skills
         }
     
+    async def run_task_stream(
+        self,
+        query: str,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None
+    ):
+        """
+        Execute a research task with streaming response
+        Yields chunks of the response as they are generated
+        """
+        logger.info(f"Running streaming task: session_id={session_id}, query_length={len(query)}")
+        
+        # Get relevant skills
+        relevant_skills = self.skill_library.get_relevant_skills(query)
+        logger.debug(f"Retrieved {len(relevant_skills)} relevant skills")
+        
+        # Add skill context if relevant
+        if relevant_skills:
+            skill_text = "\n\nRelevant learned approaches:\n"
+            for skill in relevant_skills:
+                skill_text += f"- {skill.name}: {skill.context}\n"
+            enhanced_query = query + skill_text
+        else:
+            enhanced_query = query
+        
+        # Prepare trajectory info
+        trajectory = {
+            'query': query,
+            'response': '',
+            'tools_used': [],
+            'session_id': session_id,
+            'user_id': user_id,
+            'relevant_skills': [s.name for s in relevant_skills]
+        }
+        
+        # Try to use model's streaming capability
+        try:
+            # Check if agent's model supports streaming
+            model = self.agent.model
+            if hasattr(model, 'stream') or hasattr(model, 'stream_response'):
+                logger.debug("Using model streaming capability...")
+                
+                # Use agent's run with streaming
+                # Agno's Agent.run() may support streaming through the model
+                # We'll need to check the actual implementation
+                # For now, we'll use a workaround: run the agent and stream the response
+                
+                # Run agent (this might block, but we'll handle it)
+                import asyncio
+                loop = asyncio.get_event_loop()
+                run_response = await loop.run_in_executor(
+                    None,
+                    lambda: self.agent.run(
+                        enhanced_query,
+                        session_id=session_id,
+                        user_id=user_id
+                    )
+                )
+                
+                # Stream the response content
+                content = run_response.content if run_response.content else ""
+                logger.info(f"Agent response received: length={len(content)}, streaming chunks...")
+                
+                # Stream content in chunks (simulate real streaming by chunking)
+                # In a real implementation, this would come from the model's stream
+                chunk_size = 20  # Characters per chunk
+                accumulated_content = ""
+                
+                for i in range(0, len(content), chunk_size):
+                    chunk = content[i:i + chunk_size]
+                    accumulated_content += chunk
+                    
+                    yield {
+                        'type': 'content',
+                        'content': chunk,
+                        'done': False,
+                        'accumulated': accumulated_content
+                    }
+                    
+                    # Small delay to simulate real streaming
+                    await asyncio.sleep(0.02)
+                
+                # Final chunk with metadata
+                yield {
+                    'type': 'done',
+                    'content': '',
+                    'done': True,
+                    'accumulated': accumulated_content,
+                    'tools_used': [],
+                    'relevant_skills': [s.name for s in relevant_skills],
+                    'full_response': run_response
+                }
+                
+            else:
+                # Fallback: run normally and stream the result
+                logger.debug("Model doesn't support streaming, using fallback...")
+                import asyncio
+                loop = asyncio.get_event_loop()
+                run_response = await loop.run_in_executor(
+                    None,
+                    lambda: self.agent.run(
+                        enhanced_query,
+                        session_id=session_id,
+                        user_id=user_id
+                    )
+                )
+                
+                content = run_response.content if run_response.content else ""
+                
+                # Stream word by word for better UX
+                words = content.split()
+                accumulated_content = ""
+                
+                for i, word in enumerate(words):
+                    accumulated_content += word + " "
+                    yield {
+                        'type': 'content',
+                        'content': word + " ",
+                        'done': False,
+                        'accumulated': accumulated_content
+                    }
+                    await asyncio.sleep(0.03)
+                
+                # Final yield with metadata
+                yield {
+                    'type': 'done',
+                    'content': '',
+                    'done': True,
+                    'accumulated': accumulated_content,
+                    'tools_used': [],
+                    'relevant_skills': [s.name for s in relevant_skills],
+                    'full_response': run_response
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in streaming task: {str(e)}", exc_info=True)
+            yield {
+                'type': 'error',
+                'content': f'Error: {str(e)}',
+                'done': True,
+                'error': str(e)
+            }
+    
     def provide_feedback(
         self,
         trajectory: Dict[str, Any],

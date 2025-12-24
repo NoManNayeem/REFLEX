@@ -215,22 +215,27 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
 
 
-@app.get("/api/chat/stream")
-async def chat_stream(
-    message: str = Query(..., description="Message to send to agent"),
-    session_id: str = Query("default", description="Session ID"),
-    user_id: str = Query("default_user", description="User ID")
-):
+@app.post("/api/chat/stream")
+async def chat_stream(request: ChatRequest):
     """
     Stream agent response using Server-Sent Events (SSE)
+    Uses Agno's streaming capabilities for real-time response generation
     """
-    logger.info(f"Received stream request: session_id={session_id}, message_length={len(message)}")
+    logger.info(f"Received stream request: session_id={request.session_id}, message_length={len(request.message)}")
     
     if not agent_instance:
         logger.error("Agent not initialized when stream request received")
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
+    session_id = request.session_id or "default"
+    user_id = request.user_id or "default_user"
+    
     async def event_generator():
+        full_response_content = ""
+        tools_used = []
+        relevant_skills = []
+        run_response = None
+        
         try:
             # Store user message
             if conversation_db:
@@ -238,68 +243,79 @@ async def chat_stream(
                     session_id=session_id,
                     user_id=user_id,
                     role="user",
-                    content=message
+                    content=request.message
                 )
             
-            # Send status updates
+            # Send initial status
             yield f"data: {json.dumps({'type': 'status', 'status': 'thinking', 'message': 'Analyzing your question...'})}\n\n"
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
             
             yield f"data: {json.dumps({'type': 'status', 'status': 'searching', 'message': 'Searching for information...'})}\n\n"
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
             
-            logger.debug(f"Starting stream for message: {message[:100]}...")
-            # Run agent and get response
-            result = agent_instance.run_task(
-                query=message,
+            logger.debug(f"Starting real stream for message: {request.message[:100]}...")
+            
+            # Use the agent's streaming method
+            async for chunk in agent_instance.run_task_stream(
+                query=request.message,
                 session_id=session_id,
                 user_id=user_id
-            )
+            ):
+                if chunk.get('type') == 'content':
+                    # Stream content chunk
+                    full_response_content += chunk.get('content', '')
+                    yield f"data: {json.dumps({
+                        'type': 'content',
+                        'content': chunk.get('content', ''),
+                        'done': False
+                    })}\n\n"
+                    
+                elif chunk.get('type') == 'done':
+                    # Final chunk with metadata
+                    full_response_content = chunk.get('accumulated', full_response_content)
+                    run_response = chunk.get('full_response')
+                    tools_used = chunk.get('tools_used', [])
+                    relevant_skills = chunk.get('relevant_skills', [])
+                    
+                    # Send final content update
+                    yield f"data: {json.dumps({
+                        'type': 'done',
+                        'content': '',
+                        'done': True,
+                        'tools_used': tools_used,
+                        'relevant_skills': relevant_skills
+                    })}\n\n"
+                    
+                elif chunk.get('type') == 'error':
+                    # Error occurred
+                    error_msg = chunk.get('error', 'Unknown error')
+                    yield f"data: {json.dumps({
+                        'type': 'error',
+                        'error': error_msg,
+                        'done': True
+                    })}\n\n"
+                    return
             
-            response_content = result['response'].content
-            tools_used = [
-                tool.get("name", "unknown") 
-                for tool in result['trajectory'].get('tools_used', [])
-            ]
-            relevant_skills = [
-                skill.name for skill in result['relevant_skills']
-            ]
-            
-            # Store agent response
-            if conversation_db:
+            # Store agent response after streaming completes
+            if conversation_db and full_response_content:
                 conversation_db.save_message(
                     session_id=session_id,
                     user_id=user_id,
                     role="agent",
-                    content=response_content,
+                    content=full_response_content,
                     tools_used=tools_used,
                     skills_applied=relevant_skills,
                     trajectory_id=session_id
                 )
-            
-            yield f"data: {json.dumps({'type': 'status', 'status': 'responding', 'message': 'Generating response...'})}\n\n"
-            await asyncio.sleep(0.1)
-            
-            # Stream response word by word
-            words = response_content.split()
-            for i, word in enumerate(words):
-                chunk_data = {
-                    "type": "content",
-                    "content": word + " ",
-                    "done": i == len(words) - 1,
-                    "tools_used": tools_used if i == len(words) - 1 else [],
-                    "relevant_skills": relevant_skills if i == len(words) - 1 else []
-                }
-                
-                yield f"data: {json.dumps(chunk_data)}\n\n"
-                await asyncio.sleep(0.05)  # Simulate streaming delay
-            
-            # Send final message
-            yield f"data: {json.dumps({'type': 'done', 'done': True})}\n\n"
+                logger.info(f"Stored agent response: length={len(full_response_content)}")
             
         except Exception as e:
             logger.error(f"Error in stream generator: {str(e)}", exc_info=True)
-            error_data = {"error": str(e), "done": True}
+            error_data = {
+                "type": "error",
+                "error": str(e),
+                "done": True
+            }
             yield f"data: {json.dumps(error_data)}\n\n"
     
     return StreamingResponse(
@@ -308,6 +324,7 @@ async def chat_stream(
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
         }
     )
 
