@@ -10,7 +10,26 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar -->
+        <!-- Conversations Sidebar -->
+        <aside class="conversations-sidebar">
+            <div class="conversations-header">
+                <button class="new-chat-btn" id="newChatBtn" title="New Chat">
+                    <i class="fas fa-plus"></i>
+                    <span>New Chat</span>
+                </button>
+            </div>
+            <div class="conversations-list" id="conversationsList">
+                <div class="conversation-item loading">
+                    <div class="loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Stats Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="logo">

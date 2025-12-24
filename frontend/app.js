@@ -8,12 +8,19 @@ console.log('API Base URL:', API_BASE);
 
 // State management
 const state = {
-    sessionId: `session_${Date.now()}`,
+    sessionId: localStorage.getItem('currentSessionId') || `session_${Date.now()}`,
     userId: 'demo_user',
     messageCount: 0,
     lastTrajectory: null,
-    currentTheme: localStorage.getItem('theme') || 'light'
+    currentTheme: localStorage.getItem('theme') || 'light',
+    conversations: [],
+    currentConversation: null
 };
+
+// Save session ID to localStorage
+if (!localStorage.getItem('currentSessionId')) {
+    localStorage.setItem('currentSessionId', state.sessionId);
+}
 
 // DOM Elements
 const elements = {
@@ -61,7 +68,11 @@ const elements = {
     // Help panel
     helpBtn: document.getElementById('helpBtn'),
     helpPanel: document.getElementById('helpPanel'),
-    closeHelpBtn: document.getElementById('closeHelpBtn')
+    closeHelpBtn: document.getElementById('closeHelpBtn'),
+    
+    // Conversations
+    newChatBtn: document.getElementById('newChatBtn'),
+    conversationsList: document.getElementById('conversationsList')
 };
 
 // Initialize application
@@ -154,8 +165,14 @@ function init() {
     // Load initial stats
     updateStats();
     
-    // Load chat history
+    // Load conversations and chat history
+    loadConversations();
     loadChatHistory();
+    
+    // New chat button
+    if (elements.newChatBtn) {
+        elements.newChatBtn.addEventListener('click', createNewConversation);
+    }
     
     // Help panel toggle
     if (elements.helpBtn) {
@@ -172,17 +189,227 @@ function init() {
     console.log('✅ Application initialized');
 }
 
+// Load all conversations
+async function loadConversations() {
+    try {
+        const response = await fetch(`${API_BASE}/sessions?limit=50`);
+        if (!response.ok) {
+            // If endpoint doesn't exist yet, create a default conversation
+            elements.conversationsList.innerHTML = '';
+            renderConversationItem({
+                session_id: state.sessionId,
+                last_activity: new Date().toISOString(),
+                message_count: 0
+            }, true);
+            return;
+        }
+        
+        const data = await response.json();
+        state.conversations = data.sessions || [];
+        
+        // Render conversations
+        elements.conversationsList.innerHTML = '';
+        
+        if (state.conversations.length === 0) {
+            // Create default conversation if none exist
+            renderConversationItem({
+                session_id: state.sessionId,
+                last_activity: new Date().toISOString(),
+                message_count: 0
+            }, true);
+        } else {
+            // Sort by last activity (most recent first)
+            state.conversations.sort((a, b) => 
+                new Date(b.last_activity) - new Date(a.last_activity)
+            );
+            
+            // Check if current session exists in list
+            const currentSessionExists = state.conversations.some(c => c.session_id === state.sessionId);
+            
+            // If current session not in list, add it
+            if (!currentSessionExists) {
+                state.conversations.unshift({
+                    session_id: state.sessionId,
+                    last_activity: new Date().toISOString(),
+                    message_count: 0
+                });
+            }
+            
+            state.conversations.forEach((conv) => {
+                const isActive = conv.session_id === state.sessionId;
+                renderConversationItem(conv, isActive);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+        // Fallback: show current session
+        elements.conversationsList.innerHTML = '';
+        renderConversationItem({
+            session_id: state.sessionId,
+            last_activity: new Date().toISOString(),
+            message_count: 0
+        }, true);
+    }
+}
+
+// Render a conversation item
+function renderConversationItem(conversation, isActive = false) {
+    const item = document.createElement('div');
+    item.className = `conversation-item ${isActive ? 'active' : ''}`;
+    item.dataset.sessionId = conversation.session_id;
+    
+    // Get first message as title (or use default)
+    const title = conversation.title || `Chat ${conversation.session_id.slice(-6)}`;
+    const date = new Date(conversation.last_activity);
+    const timeAgo = getTimeAgo(date);
+    
+    item.innerHTML = `
+        <div class="conversation-content">
+            <div class="conversation-title">${escapeHtml(title)}</div>
+            <div class="conversation-meta">
+                <span>${conversation.message_count || 0} messages</span>
+                <span>•</span>
+                <span>${timeAgo}</span>
+            </div>
+        </div>
+        <div class="conversation-actions">
+            <button class="conversation-action-btn" onclick="event.stopPropagation(); deleteConversation('${conversation.session_id}')" title="Delete">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    
+    item.addEventListener('click', () => {
+        switchConversation(conversation.session_id);
+    });
+    
+    elements.conversationsList.appendChild(item);
+}
+
+// Get time ago string
+function getTimeAgo(date) {
+    const now = new Date();
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+}
+
+// Escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Switch to a different conversation
+async function switchConversation(sessionId) {
+    if (sessionId === state.sessionId) return;
+    
+    // Update state
+    state.sessionId = sessionId;
+    localStorage.setItem('currentSessionId', sessionId);
+    
+    // Update active conversation in UI
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.sessionId === sessionId);
+    });
+    
+    // Clear current chat
+    elements.chatMessages.innerHTML = '';
+    
+    // Load new conversation history
+    await loadChatHistory();
+    
+    // Update session info
+    if (elements.sessionId) {
+        elements.sessionId.textContent = sessionId;
+    }
+    
+    // Reset message count
+    state.messageCount = 0;
+    if (elements.messageCountDisplay) {
+        elements.messageCountDisplay.textContent = '0';
+    }
+}
+
+// Create new conversation
+function createNewConversation() {
+    const newSessionId = `session_${Date.now()}`;
+    switchConversation(newSessionId);
+    
+    // Add to conversations list
+    const newConv = {
+        session_id: newSessionId,
+        last_activity: new Date().toISOString(),
+        message_count: 0
+    };
+    
+    state.conversations.unshift(newConv);
+    
+    // Remove active class from all items
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // Add new conversation at the top
+    const newItem = renderConversationItem(newConv, true);
+    elements.conversationsList.insertBefore(newItem, elements.conversationsList.firstChild);
+}
+
+// Create conversation element (helper function)
+function createConversationElement(conversation, isActive = false) {
+    return renderConversationItem(conversation, isActive);
+}
+
+// Delete conversation
+async function deleteConversation(sessionId) {
+    if (!confirm('Are you sure you want to delete this conversation?')) return;
+    
+    // Remove from UI
+    const item = document.querySelector(`[data-session-id="${sessionId}"]`);
+    if (item) item.remove();
+    
+    // If it's the current session, create a new one
+    if (sessionId === state.sessionId) {
+        createNewConversation();
+    }
+    
+    // Remove from state
+    state.conversations = state.conversations.filter(c => c.session_id !== sessionId);
+}
+
+// Make deleteConversation available globally
+window.deleteConversation = deleteConversation;
+
 // Load chat history from database
 async function loadChatHistory() {
     try {
+        // Clear current messages first
+        const welcomeMsg = elements.chatMessages.querySelector('.welcome-message');
+        
         const response = await fetch(`${API_BASE}/chat/history?session_id=${state.sessionId}`);
-        if (!response.ok) return;
+        if (!response.ok) {
+            // If no history, show welcome message
+            if (!welcomeMsg && elements.chatMessages.children.length === 0) {
+                showWelcomeMessage();
+            }
+            return;
+        }
         
         const data = await response.json();
         if (data.messages && data.messages.length > 0) {
             // Remove welcome message if history exists
-            const welcomeMsg = elements.chatMessages.querySelector('.welcome-message');
             if (welcomeMsg) welcomeMsg.remove();
+            
+            // Clear any existing messages
+            elements.chatMessages.innerHTML = '';
             
             // Load messages
             data.messages.forEach(msg => {
@@ -193,14 +420,77 @@ async function loadChatHistory() {
             });
             
             // Scroll to bottom after loading all
-            elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+            setTimeout(() => {
+                elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+            }, 100);
+            
             state.messageCount = data.messages.length;
             if (elements.messageCountDisplay) {
                 elements.messageCountDisplay.textContent = state.messageCount;
             }
+            
+            // Update conversation title with first message
+            updateConversationTitle(data.messages[0]?.content || 'New Chat');
+        } else {
+            // No history, show welcome message
+            if (!welcomeMsg) {
+                showWelcomeMessage();
+            }
         }
     } catch (error) {
         console.error('Error loading chat history:', error);
+        // Show welcome message on error
+        if (elements.chatMessages.children.length === 0) {
+            showWelcomeMessage();
+        }
+    }
+}
+
+// Show welcome message
+function showWelcomeMessage() {
+    const welcomeDiv = document.createElement('div');
+    welcomeDiv.className = 'welcome-message';
+    welcomeDiv.innerHTML = `
+        <i class="fas fa-robot"></i>
+        <h2>Welcome to REFLEX</h2>
+        <p>I'm an AI agent that learns from feedback using reinforcement learning. Ask me anything!</p>
+        <div class="feature-pills">
+            <span class="pill"><i class="fas fa-search"></i> Web Search</span>
+            <span class="pill"><i class="fas fa-database"></i> RAG</span>
+            <span class="pill"><i class="fas fa-brain"></i> Self-Improvement</span>
+            <span class="pill"><i class="fas fa-memory"></i> Memory</span>
+        </div>
+    `;
+    elements.chatMessages.appendChild(welcomeDiv);
+}
+
+// Update conversation title in sidebar
+function updateConversationTitle(firstMessage) {
+    const item = document.querySelector(`[data-session-id="${state.sessionId}"]`);
+    if (item) {
+        const titleEl = item.querySelector('.conversation-title');
+        if (titleEl) {
+            // Use first 30 chars of first message as title
+            const title = firstMessage.length > 30 
+                ? firstMessage.substring(0, 30) + '...'
+                : firstMessage;
+            titleEl.textContent = escapeHtml(title);
+        }
+    }
+}
+
+// Update conversation in sidebar (message count, last activity)
+function updateConversationInSidebar() {
+    const item = document.querySelector(`[data-session-id="${state.sessionId}"]`);
+    if (item) {
+        const metaEl = item.querySelector('.conversation-meta');
+        if (metaEl) {
+            metaEl.innerHTML = `
+                <span>${state.messageCount} messages</span>
+                <span>•</span>
+                <span>Just now</span>
+            `;
+        }
     }
 }
 
@@ -258,6 +548,14 @@ async function sendMessage() {
         // Update message count
         state.messageCount++;
         elements.messageCountDisplay.textContent = state.messageCount;
+        
+        // Update conversation title if this is the first message
+        if (state.messageCount === 1) {
+            updateConversationTitle(message);
+        }
+        
+        // Update conversation in sidebar
+        updateConversationInSidebar();
         
         // Update stats
         updateStats();
