@@ -12,4 +12,5 @@ pydantic==2.10.2
 websockets==14.1
 sqlalchemy>=2.0.0
 beautifulsoup4
+tantivy
 
