@@ -255,6 +255,367 @@ curl http://localhost:8000/api/stats
 curl http://localhost:8000/api/skills
 ```
 
+## 📚 Core Concepts & Technologies
+
+This section explains the fundamental concepts and technologies used in REFLEX, why we chose them, and how they work together to create a self-improving research agent.
+
+### 🤖 Artificial Intelligence (AI)
+
+**What is AI?**
+Artificial Intelligence refers to computer systems that can perform tasks typically requiring human intelligence, such as understanding language, making decisions, and learning from experience.
+
+**Why We Use AI:**
+- **Natural Language Understanding**: AI enables the agent to understand user queries in natural language
+- **Reasoning**: AI allows the agent to process information and generate coherent responses
+- **Adaptability**: AI systems can adapt to new situations and learn from feedback
+
+**How We Use It in REFLEX:**
+Our agent uses AI to understand research questions, process information from multiple sources, and generate comprehensive answers. The AI component is powered by Large Language Models (LLMs) that have been trained on vast amounts of text data.
+
+```mermaid
+mindmap
+  root((AI in REFLEX))
+    Natural Language Processing
+      Understanding Queries
+      Generating Responses
+      Context Awareness
+    Machine Learning
+      Pattern Recognition
+      Skill Learning
+      Performance Improvement
+    Decision Making
+      Tool Selection
+      Knowledge Retrieval
+      Response Generation
+    Learning Systems
+      Feedback Processing
+      Skill Accumulation
+      Continuous Improvement
+```
+
+### 🧠 Large Language Models (LLMs)
+
+**What are LLMs?**
+Large Language Models are AI systems trained on massive text datasets to understand and generate human-like text. They can perform tasks like answering questions, writing code, summarizing documents, and more.
+
+**Why We Use LLMs:**
+- **Language Understanding**: LLMs excel at understanding context and nuance in human language
+- **Knowledge Base**: Pre-trained LLMs contain vast amounts of information
+- **Flexibility**: Can handle diverse queries without task-specific training
+- **Generation**: Can produce coherent, well-structured responses
+
+**How We Use It in REFLEX:**
+We use **Claude Sonnet 4** (Anthropic's LLM) as the core reasoning engine. The LLM:
+- Processes user queries and context
+- Generates research responses
+- Uses tools (web search, knowledge base) when needed
+- Maintains conversation context across messages
+
+```mermaid
+graph TB
+    subgraph "LLM Architecture in REFLEX"
+        Input[User Query + Context] --> LLM[Claude Sonnet 4]
+        LLM --> Reasoning[Reasoning Layer]
+        Reasoning --> Tools{Tool Selection}
+        Tools -->|Web Search| Search[DuckDuckGo]
+        Tools -->|Knowledge| RAG[Vector DB]
+        Tools -->|None| Direct[Direct Response]
+        Search --> LLM
+        RAG --> LLM
+        Direct --> LLM
+        LLM --> Output[Generated Response]
+    end
+    
+    style LLM fill:#6366f1,color:#fff
+    style Reasoning fill:#8b5cf6,color:#fff
+    style Output fill:#10b981,color:#fff
+```
+
+**Why Claude Sonnet 4?**
+- **Advanced Reasoning**: Superior reasoning capabilities for research tasks
+- **Long Context**: Can handle long conversations and documents
+- **Safety**: Built with safety considerations
+- **Performance**: Excellent balance of speed and quality
+
+### 🤖 AI Agents
+
+**What are AI Agents?**
+AI Agents are autonomous systems that can perceive their environment, make decisions, and take actions to achieve goals. Unlike simple chatbots, agents can use tools, access external information, and maintain memory across interactions.
+
+**Why We Use Agents:**
+- **Tool Usage**: Agents can use external tools (web search, databases) beyond just text generation
+- **Memory**: Agents maintain context and learn from past interactions
+- **Autonomy**: Agents can make decisions about which tools to use and how to approach tasks
+- **Self-Improvement**: Agents can learn and adapt based on feedback
+
+**How We Use It in REFLEX:**
+We use the **Agno v2** framework to create our research agent. The agent:
+- Receives user queries
+- Decides which tools to use (web search, knowledge base)
+- Retrieves relevant information
+- Generates comprehensive responses
+- Learns from feedback to improve over time
+
+```mermaid
+graph LR
+    subgraph "Agent Architecture"
+        A[Agno Agent] --> B[Perception Layer]
+        B --> C[Decision Layer]
+        C --> D[Action Layer]
+        D --> E[Tool Execution]
+        E --> F[Response Generation]
+        F --> G[Memory Update]
+        G --> H[Learning]
+        H --> A
+    end
+    
+    subgraph "Tools Available"
+        I[Web Search]
+        J[Knowledge Base]
+        K[Conversation History]
+    end
+    
+    E --> I
+    E --> J
+    E --> K
+    
+    style A fill:#6366f1,color:#fff
+    style C fill:#8b5cf6,color:#fff
+    style H fill:#10b981,color:#fff
+```
+
+**Why Agno Framework?**
+- **Modern Design**: Built for 2025 with latest best practices
+- **Tool Integration**: Easy integration of external tools
+- **Memory Management**: Built-in conversation history and context management
+- **Flexibility**: Supports multiple LLM providers and configurations
+
+### 🎯 Reinforcement Learning (RL)
+
+**What is Reinforcement Learning?**
+Reinforcement Learning is a machine learning paradigm where an agent learns to make decisions by interacting with an environment and receiving rewards or penalties for its actions. The agent's goal is to maximize cumulative reward over time.
+
+**Why We Use RL:**
+- **Self-Improvement**: RL allows the agent to improve its performance based on feedback
+- **Adaptation**: The agent learns which strategies work best for different types of queries
+- **Optimization**: RL optimizes the agent's behavior to maximize user satisfaction
+- **Skill Learning**: RL helps the agent learn and refine skills over time
+
+**How We Use It in REFLEX:**
+We implement a GRPO-style (Group Relative Policy Optimization) RL approach:
+1. **Trajectory Collection**: Store agent actions and responses
+2. **Reward Signal**: Calculate rewards from user feedback (task success, quality, efficiency)
+3. **Advantage Computation**: Compute advantages for different actions/skills
+4. **Policy Update**: Boost successful skills and strategies
+5. **Agent Recreation**: Update the agent with improved skills
+
+```mermaid
+flowchart TD
+    subgraph "RL Training Cycle"
+        A[Agent Action] --> B[User Feedback]
+        B --> C[Reward Calculation]
+        C --> D[Trajectory Storage]
+        D --> E{Enough Trajectories?}
+        E -->|No| A
+        E -->|Yes| F[Compute Advantages]
+        F --> G[Update Policy]
+        G --> H[Boost Successful Skills]
+        H --> I[Recreate Agent]
+        I --> J[Improved Performance]
+        J --> A
+    end
+    
+    subgraph "Reward Components"
+        K[Task Success: 40%]
+        L[Quality Score: 30%]
+        M[Efficiency: 15%]
+        N[User Feedback: 15%]
+    end
+    
+    C --> K
+    C --> L
+    C --> M
+    C --> N
+    
+    style A fill:#6366f1,color:#fff
+    style F fill:#8b5cf6,color:#fff
+    style J fill:#10b981,color:#fff
+```
+
+**Why GRPO-Style RL?**
+- **Simplicity**: Easier to implement than complex RL algorithms
+- **Effectiveness**: Works well for skill-based learning
+- **Interpretability**: Clear connection between feedback and improvements
+- **Efficiency**: Doesn't require massive compute resources
+
+### 🎓 Reinforcement Learning from Human Feedback (RLHF)
+
+**What is RLHF?**
+Reinforcement Learning from Human Feedback is a technique where an AI system learns from human-provided feedback rather than predefined rewards. Humans evaluate the AI's outputs, and the system learns to produce outputs that humans prefer.
+
+**Why We Use RLHF:**
+- **Human-Aligned**: Ensures the agent improves in ways that matter to users
+- **Quality Focus**: Human feedback captures nuanced quality aspects
+- **Customization**: Allows users to shape the agent's behavior
+- **Real-World Performance**: Better reflects real-world usage than synthetic rewards
+
+**How We Use It in REFLEX:**
+Users provide feedback through sliders and ratings:
+- **Task Success**: Did the agent complete the task?
+- **Quality**: How good was the response?
+- **Efficiency**: How efficiently did the agent work?
+- **User Feedback**: Overall satisfaction
+
+This feedback is converted into a reward signal that guides the agent's learning.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent
+    participant RL System
+    participant Skill Library
+    
+    User->>Agent: Ask Question
+    Agent->>User: Generate Response
+    User->>Agent: Provide Feedback
+    Note over User,Agent: Task Success: 0.9<br/>Quality: 0.85<br/>Efficiency: 0.8<br/>Satisfaction: 1.0
+    
+    Agent->>RL System: Calculate Reward
+    RL System->>RL System: Weighted Sum<br/>(40% + 30% + 15% + 15%)
+    RL System->>Skill Library: Update Skill Stats
+    Skill Library->>Skill Library: Increase Success Rate<br/>Update Usage Count
+    
+    Note over RL System,Skill Library: Skills with High Rewards<br/>Get Boosted
+    
+    RL System->>Agent: Recreate with Updated Skills
+    Agent->>User: Improved Performance
+```
+
+**Why RLHF Over Pure RL?**
+- **User-Centric**: Learning is directly aligned with user preferences
+- **Practical**: Works with real user interactions, not simulated environments
+- **Flexible**: Can adapt to different user needs and preferences
+- **Transparent**: Users can see and control how the agent learns
+
+### 🔍 Retrieval Augmented Generation (RAG)
+
+**What is RAG?**
+Retrieval Augmented Generation is a technique that enhances LLM responses by retrieving relevant information from a knowledge base before generating a response. This allows LLMs to access up-to-date, domain-specific information beyond their training data.
+
+**Why We Use RAG:**
+- **Current Information**: Access to real-time and up-to-date information
+- **Domain Expertise**: Can incorporate specialized knowledge
+- **Accuracy**: Reduces hallucinations by grounding responses in retrieved facts
+- **Scalability**: Can add new knowledge without retraining the LLM
+- **Customization**: Users can add their own knowledge sources
+
+**How We Use It in REFLEX:**
+We implement RAG using:
+1. **Vector Database (LanceDB)**: Stores document embeddings for fast similarity search
+2. **Embeddings (OpenAI)**: Converts text into vector representations
+3. **Hybrid Search**: Combines semantic and keyword search for better results
+4. **Knowledge Base**: User-manageable collection of URLs and documents
+
+```mermaid
+graph TB
+    subgraph "RAG Pipeline in REFLEX"
+        A[User Query] --> B[Query Embedding]
+        B --> C[Vector Search]
+        C --> D[Retrieve Top K]
+        D --> E[Context Assembly]
+        E --> F[LLM Generation]
+        F --> G[Enhanced Response]
+    end
+    
+    subgraph "Knowledge Base"
+        H[URL Sources] --> I[Document Scraping]
+        I --> J[Text Chunking]
+        J --> K[Embedding Generation]
+        K --> L[Vector Storage]
+    end
+    
+    L --> C
+    
+    subgraph "Search Strategy"
+        M[Semantic Search]
+        N[Keyword Search]
+        O[Hybrid Combination]
+    end
+    
+    C --> M
+    C --> N
+    M --> O
+    N --> O
+    O --> D
+    
+    style A fill:#6366f1,color:#fff
+    style F fill:#8b5cf6,color:#fff
+    style G fill:#10b981,color:#fff
+    style L fill:#f59e0b,color:#fff
+```
+
+**Why LanceDB?**
+- **Performance**: Fast vector search with hybrid capabilities
+- **Simplicity**: Easy to integrate and manage
+- **Scalability**: Handles growing knowledge bases efficiently
+- **Open Source**: Free and actively maintained
+
+**Why Hybrid Search?**
+- **Semantic Understanding**: Finds conceptually similar content
+- **Keyword Matching**: Catches exact terms and phrases
+- **Better Coverage**: Combines strengths of both approaches
+- **Improved Relevance**: More accurate retrieval results
+
+### 🧩 How Concepts Work Together
+
+```mermaid
+graph TB
+    subgraph "Concept Integration"
+        AI[AI Foundation] --> LLM[LLM Core]
+        LLM --> Agent[Agent Framework]
+        Agent --> RL[RL Learning]
+        RL --> RLHF[RLHF Feedback]
+        Agent --> RAG[RAG Enhancement]
+        
+        RLHF --> Skills[Skill Learning]
+        RAG --> Knowledge[Knowledge Retrieval]
+        Skills --> Improvement[Self-Improvement]
+        Knowledge --> Quality[Response Quality]
+        
+        Improvement --> Agent
+        Quality --> Agent
+    end
+    
+    style AI fill:#6366f1,color:#fff
+    style LLM fill:#8b5cf6,color:#fff
+    style Agent fill:#10b981,color:#fff
+    style RL fill:#f59e0b,color:#fff
+    style RAG fill:#ef4444,color:#fff
+```
+
+**The Complete Flow:**
+1. **User Query** → AI Agent receives natural language input
+2. **LLM Processing** → Claude processes the query with context
+3. **RAG Retrieval** → Relevant knowledge is retrieved from vector DB
+4. **Tool Usage** → Agent decides to use web search if needed
+5. **Response Generation** → LLM generates comprehensive answer
+6. **User Feedback** → User provides RLHF feedback
+7. **RL Learning** → Agent learns from feedback using RL
+8. **Skill Update** → Successful strategies become skills
+9. **Continuous Improvement** → Agent gets better over time
+
+### 🎯 Why This Architecture?
+
+**Modularity**: Each component (LLM, RAG, RL) can be improved independently
+
+**Scalability**: Can handle growing knowledge bases and user bases
+
+**Flexibility**: Easy to add new tools, knowledge sources, or learning methods
+
+**User Control**: Users can manage knowledge base and provide direct feedback
+
+**Transparency**: Clear separation of concerns makes the system understandable
+
 ## 🎯 Key Components
 
 ### System Architecture
