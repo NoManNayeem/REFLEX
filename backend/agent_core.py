@@ -247,34 +247,81 @@ class SelfImprovingResearchAgent:
         # Load saved URLs from file
         self._load_knowledge_urls()
         
-        if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder:
+        if self.openai_api_key and Knowledge and LanceDb and OpenAIEmbedder and WebsiteReader:
             try:
                 logger.info("Initializing knowledge base with LanceDB...")
                 if self.knowledge_urls:
-                    self.knowledge = WebsiteKnowledgeBase(
-                        urls=self.knowledge_urls,
-                        vector_db=LanceDb(
-                            uri=self.lancedb_path,
-                            table_name="research_docs",
-                            search_type=SearchType.hybrid,
-                            embedder=OpenAIEmbedder(
-                                id="text-embedding-3-small",
-                                dimensions=1536,
-                                api_key=self.openai_api_key
-                            )
-                        )
+                    # Create embedder
+                    embedder = OpenAIEmbedder(
+                        id="text-embedding-3-small",
+                        api_key=self.openai_api_key
                     )
+                    
+                    # Create vector database
+                    vector_db = LanceDb(
+                        uri=self.lancedb_path,
+                        table_name="research_docs",
+                        search_type=SearchType.hybrid,
+                        embedder=embedder
+                    )
+                    
+                    # Create website reader
+                    website_reader = WebsiteReader()
+                    
+                    # Create knowledge base with website reader
+                    self.knowledge = Knowledge(
+                        name="Research Knowledge Base",
+                        description="Knowledge base for research documents",
+                        vector_db=vector_db,
+                        readers={"url": website_reader, "website": website_reader}
+                    )
+                    
+                    # Load URLs into knowledge base
+                    logger.info(f"Loading {len(self.knowledge_urls)} URLs into knowledge base...")
+                    for url in self.knowledge_urls:
+                        try:
+                            self.knowledge.load(url=url, upsert=True)
+                            logger.debug(f"Loaded URL: {url}")
+                        except Exception as e:
+                            logger.warning(f"Failed to load URL {url}: {e}")
+                    
                     logger.info(f"Knowledge base initialized with {len(self.knowledge_urls)} URLs")
                 else:
+                    # Initialize empty knowledge base
+                    embedder = OpenAIEmbedder(
+                        id="text-embedding-3-small",
+                        api_key=self.openai_api_key
+                    )
+                    vector_db = LanceDb(
+                        uri=self.lancedb_path,
+                        table_name="research_docs",
+                        search_type=SearchType.hybrid,
+                        embedder=embedder
+                    )
+                    website_reader = WebsiteReader()
+                    self.knowledge = Knowledge(
+                        name="Research Knowledge Base",
+                        description="Knowledge base for research documents",
+                        vector_db=vector_db,
+                        readers={"url": website_reader, "website": website_reader}
+                    )
                     logger.info("Knowledge base initialized but no URLs configured")
             except Exception as e:
-                logger.warning(f"Knowledge base not initialized: {e}")
+                logger.warning(f"Knowledge base not initialized: {e}", exc_info=True)
                 self.knowledge = None
         else:
+            missing = []
             if not self.openai_api_key:
-                logger.info("Knowledge base disabled (no OpenAI API key)")
-            else:
-                logger.info("Knowledge base disabled (required modules not available)")
+                missing.append("OpenAI API key")
+            if not Knowledge:
+                missing.append("Knowledge class")
+            if not LanceDb:
+                missing.append("LanceDb")
+            if not OpenAIEmbedder:
+                missing.append("OpenAIEmbedder")
+            if not WebsiteReader:
+                missing.append("WebsiteReader")
+            logger.info(f"Knowledge base disabled (missing: {', '.join(missing)})")
         
         # Create the main agent
         self.agent = self._create_agent()
