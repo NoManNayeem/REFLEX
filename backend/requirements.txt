@@ -1,0 +1,14 @@
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+agno==2.3.12
+anthropic>=0.39.0
+openai==1.54.0
+duckduckgo-search==6.3.5
+ddgs
+lancedb==0.16.0
+numpy==1.26.4
+python-dotenv==1.0.1
+pydantic==2.10.2
+websockets==14.1
+sqlalchemy>=2.0.0
+

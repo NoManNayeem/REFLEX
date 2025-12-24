@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REFLEX - Research Engine with Feedback-Driven Learning</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i class="fas fa-brain"></i>
+                    <span>REFLEX</span>
+                </div>
+                <button class="theme-toggle" id="themeToggle">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+
+            <div class="sidebar-content">
+                <div class="stats-card">
+                    <h3><i class="fas fa-chart-line"></i> Performance</h3>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Tasks</span>
+                        <span class="stat-value" id="totalTasks">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Success Rate</span>
+                        <span class="stat-value" id="successRate">0%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Avg Reward</span>
+                        <span class="stat-value" id="avgReward">0.00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Skills Learned</span>
+                        <span class="stat-value" id="skillCount">0</span>
+                    </div>
+                </div>
+
+                <div class="skills-section">
+                    <h3><i class="fas fa-lightbulb"></i> Top Skills</h3>
+                    <div id="topSkillsList" class="skills-list">
+                        <p class="empty-state">No skills learned yet</p>
+                    </div>
+                </div>
+
+                <button class="train-btn" id="trainBtn">
+                    <i class="fas fa-graduation-cap"></i>
+                    Trigger Training
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="main-header">
+                <h1>REFLEX - Research Engine with Feedback-Driven Learning</h1>
+                <div class="header-actions">
+                    <button class="icon-btn" id="refreshBtn" title="Refresh Stats">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                    <button class="icon-btn" id="viewSkillsBtn" title="View All Skills">
+                        <i class="fas fa-list"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Chat Area -->
+            <div class="chat-container">
+                <div class="chat-messages" id="chatMessages">
+                    <div class="welcome-message">
+                        <i class="fas fa-robot"></i>
+                        <h2>Welcome to REFLEX</h2>
+                        <p>I'm an AI agent that learns from feedback using reinforcement learning. Ask me anything!</p>
+                        <div class="feature-pills">
+                            <span class="pill"><i class="fas fa-search"></i> Web Search</span>
+                            <span class="pill"><i class="fas fa-database"></i> RAG</span>
+                            <span class="pill"><i class="fas fa-brain"></i> Self-Improvement</span>
+                            <span class="pill"><i class="fas fa-memory"></i> Memory</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-input-container">
+                    <div class="input-wrapper">
+                        <textarea 
+                            id="messageInput" 
+                            placeholder="Ask a research question..." 
+                            rows="1"
+                        ></textarea>
+                        <button id="sendBtn" class="send-btn">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                    <div class="input-hints">
+                        <span class="hint"><i class="fas fa-lightbulb"></i> Try: "What is GRPO in RL?"</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right Panel -->
+        <aside class="right-panel">
+            <div class="panel-tabs">
+                <button class="tab-btn active" data-tab="feedback">
+                    <i class="fas fa-star"></i> Feedback
+                </button>
+                <button class="tab-btn" data-tab="trajectory">
+                    <i class="fas fa-route"></i> Trajectory
+                </button>
+            </div>
+
+            <div class="panel-content">
+                <!-- Feedback Tab -->
+                <div class="tab-pane active" id="feedbackTab">
+                    <h3>Provide Feedback</h3>
+                    <p class="tab-description">Help the agent learn by providing feedback on its last response</p>
+                    
+                    <div class="feedback-form">
+                        <div class="form-group">
+                            <label>
+                                <i class="fas fa-check-circle"></i> Task Success
+                                <span class="value-display" id="taskSuccessValue">0.5</span>
+                            </label>
+                            <input type="range" id="taskSuccess" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <i class="fas fa-gem"></i> Quality
+                                <span class="value-display" id="qualityValue">0.5</span>
+                            </label>
+                            <input type="range" id="quality" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <i class="fas fa-bolt"></i> Efficiency
+                                <span class="value-display" id="efficiencyValue">0.5</span>
+                            </label>
+                            <input type="range" id="efficiency" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <i class="fas fa-thumbs-up"></i> User Feedback
+                                <span class="value-display" id="userFeedbackValue">0.0</span>
+                            </label>
+                            <input type="range" id="userFeedback" min="-1" max="1" step="0.1" value="0">
+                        </div>
+
+                        <div class="form-group">
+                            <label>
+                                <i class="fas fa-certificate"></i> Create Skill
+                            </label>
+                            <input type="checkbox" id="createSkill" class="checkbox">
+                        </div>
+
+                        <div id="skillForm" class="skill-form" style="display: none;">
+                            <input type="text" id="skillName" placeholder="Skill name" class="form-input">
+                            <input type="text" id="skillDescription" placeholder="Description" class="form-input">
+                            <textarea id="skillContext" placeholder="Context/approach" rows="2" class="form-input"></textarea>
+                        </div>
+
+                        <button id="submitFeedback" class="submit-btn">
+                            <i class="fas fa-paper-plane"></i> Submit Feedback
+                        </button>
+
+                        <div id="feedbackStatus" class="status-message"></div>
+                    </div>
+                </div>
+
+                <!-- Trajectory Tab -->
+                <div class="tab-pane" id="trajectoryTab">
+                    <h3>Current Trajectory</h3>
+                    <p class="tab-description">View tools used and skills applied in the last response</p>
+                    
+                    <div class="trajectory-info">
+                        <div class="info-section">
+                            <h4><i class="fas fa-tools"></i> Tools Used</h4>
+                            <div id="toolsUsed" class="info-list">
+                                <p class="empty-state">No tools used yet</p>
+                            </div>
+                        </div>
+
+                        <div class="info-section">
+                            <h4><i class="fas fa-brain"></i> Skills Applied</h4>
+                            <div id="skillsApplied" class="info-list">
+                                <p class="empty-state">No skills applied yet</p>
+                            </div>
+                        </div>
+
+                        <div class="info-section">
+                            <h4><i class="fas fa-clock"></i> Session Info</h4>
+                            <div class="session-info">
+                                <p><strong>Session ID:</strong> <span id="sessionId">-</span></p>
+                                <p><strong>Messages:</strong> <span id="messageCount">0</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Skills Modal -->
+    <div id="skillsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-lightbulb"></i> All Learned Skills</h2>
+                <button class="close-btn" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="skillSearch" placeholder="Search skills...">
+                </div>
+                <div id="allSkillsList" class="all-skills-list">
+                    <p class="loading">Loading skills...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
