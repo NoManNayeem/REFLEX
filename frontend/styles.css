@@ -1274,6 +1274,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
 /* Markdown Content Styling */
 .message-text {
     line-height: 1.7;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Ensure markdown elements are properly styled */
+.message-text * {
+    max-width: 100%;
 }
 
 .message-text h1,

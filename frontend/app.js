@@ -741,15 +741,37 @@ function addMessage(type, content, meta = {}, shouldScroll = true) {
 
 // Format message with proper markdown rendering
 function formatMessage(content) {
+    if (!content) return '';
+    
+    // Ensure content is a string
+    const text = String(content);
+    
     if (typeof marked !== 'undefined') {
-        // Use marked.js for proper markdown rendering
-        return marked.parse(content, {
-            breaks: true,
-            gfm: true
-        });
+        try {
+            // Use marked.js for proper markdown rendering
+            // Configure marked to be safe and handle breaks
+            const markedOptions = {
+                breaks: true,
+                gfm: true,
+                headerIds: false,
+                mangle: false
+            };
+            
+            // Parse markdown
+            const html = marked.parse(text, markedOptions);
+            return html;
+        } catch (error) {
+            console.warn('Markdown parsing error:', error);
+            // Fallback to basic formatting if marked fails
+            return escapeHtml(text)
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
+        }
     } else {
         // Fallback to basic formatting
-        return content
+        return escapeHtml(text)
             .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*(.*?)\*/g, '<em>$1</em>')
             .replace(/`(.*?)`/g, '<code>$1</code>')
@@ -830,7 +852,8 @@ function addStreamingMessage(type, initialContent) {
     
     const textDiv = document.createElement('div');
     textDiv.className = 'message-text streaming-text';
-    textDiv.innerHTML = formatMessage(initialContent);
+    // Don't use formatMessage here - use plain text for streaming
+    textDiv.textContent = initialContent || '';
     
     contentDiv.appendChild(textDiv);
     messageDiv.appendChild(avatar);
