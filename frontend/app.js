@@ -715,8 +715,11 @@ function addMessage(type, content, meta = {}, shouldScroll = true) {
         if (meta.sources && meta.sources.length > 0) {
             const sourcesHtml = meta.sources.map(source => {
                 const icon = source.type === 'rag' ? 'fa-database' : 'fa-globe';
-                return `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="${escapeHtml(source.title)}">
-                    <i class="fas ${icon}"></i> ${escapeHtml(source.title || source.url)}
+                const identifier = source.identifier || (source.type === 'rag' ? 'RAG' : 'Web');
+                const displayTitle = source.title || source.url || 'Unknown source';
+                return `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="${escapeHtml(displayTitle)}">
+                    <span class="source-identifier">[${identifier}]</span>
+                    <i class="fas ${icon}"></i> ${escapeHtml(displayTitle)}
                 </a>`;
             }).join('');
             metaDiv.innerHTML += `<div class="message-sources"><i class="fas fa-link"></i> Sources: ${sourcesHtml}</div>`;
@@ -935,8 +938,11 @@ function replaceStreamingMessage(id, content, meta = {}) {
         if (meta.sources && meta.sources.length > 0) {
             const sourcesHtml = meta.sources.map(source => {
                 const icon = source.type === 'rag' ? 'fa-database' : 'fa-globe';
-                return `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="${escapeHtml(source.title)}">
-                    <i class="fas ${icon}"></i> ${escapeHtml(source.title || source.url)}
+                const identifier = source.identifier || (source.type === 'rag' ? 'RAG' : 'Web');
+                const displayTitle = source.title || source.url || 'Unknown source';
+                return `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="${escapeHtml(displayTitle)}">
+                    <span class="source-identifier">[${identifier}]</span>
+                    <i class="fas ${icon}"></i> ${escapeHtml(displayTitle)}
                 </a>`;
             }).join('');
             metaDiv.innerHTML += `<div class="message-sources"><i class="fas fa-link"></i> Sources: ${sourcesHtml}</div>`;

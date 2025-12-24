@@ -283,7 +283,16 @@ async def chat_stream(request: ChatRequest):
                 session_id=session_id,
                 user_id=user_id
             ):
-                if chunk.get('type') == 'content':
+                if chunk.get('type') == 'status':
+                    # Stream status update (tool calls, searching, etc.)
+                    status_data = {
+                        'type': 'status',
+                        'status': chunk.get('status', 'thinking'),
+                        'message': chunk.get('message', 'Processing...')
+                    }
+                    yield f"data: {json.dumps(status_data)}\n\n"
+                    
+                elif chunk.get('type') == 'content':
                     # Stream content chunk
                     full_response_content += chunk.get('content', '')
                     chunk_data = {

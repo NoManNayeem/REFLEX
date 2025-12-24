@@ -659,7 +659,52 @@ class SelfImprovingResearchAgent:
                         logger.error(f"Error in sync iterator: {e}", exc_info=True)
                 
                 # Process chunks - Agno yields RunContentEvent objects
+                last_tool_status = None
                 for chunk in sync_iter():
+                    # Check for tool calls or tool-related events
+                    if hasattr(chunk, 'event'):
+                        event_type = chunk.event
+                        
+                        # Detect tool calls - check for tools attribute or tool-related events
+                        if hasattr(chunk, 'tools') and chunk.tools:
+                            # Tool is being called
+                            tool_names = []
+                            if isinstance(chunk.tools, list):
+                                tool_names = [str(t) for t in chunk.tools]
+                            elif hasattr(chunk.tools, '__iter__'):
+                                tool_names = [str(t) for t in chunk.tools]
+                            
+                            # Generate status message for tool usage
+                            for tool_name in tool_names:
+                                if 'duckduckgo' in tool_name.lower() or 'search' in tool_name.lower():
+                                    status_msg = "Searching the web for information..."
+                                    if status_msg != last_tool_status:
+                                        yield {
+                                            'type': 'status',
+                                            'status': 'searching',
+                                            'message': status_msg
+                                        }
+                                        last_tool_status = status_msg
+                                elif 'knowledge' in tool_name.lower() or 'rag' in tool_name.lower():
+                                    status_msg = "Searching knowledge base..."
+                                    if status_msg != last_tool_status:
+                                        yield {
+                                            'type': 'status',
+                                            'status': 'searching',
+                                            'message': status_msg
+                                        }
+                                        last_tool_status = status_msg
+                                else:
+                                    status_msg = f"Using {tool_name}..."
+                                    if status_msg != last_tool_status:
+                                        yield {
+                                            'type': 'status',
+                                            'status': 'tool_use',
+                                            'message': status_msg
+                                        }
+                                        last_tool_status = status_msg
+                    
+                    # Handle content chunks
                     content_to_yield = None
                     
                     # Handle RunContentEvent objects (Agno's streaming format)
@@ -674,13 +719,14 @@ class SelfImprovingResearchAgent:
                                 else:
                                     # Try to convert to string
                                     content_to_yield = str(content)
-                    elif hasattr(chunk, 'content'):
-                        # Direct content attribute
+                    elif hasattr(chunk, 'content') and not hasattr(chunk, 'event'):
+                        # Direct content attribute (might be RunOutput)
                         content = chunk.content
-                        if isinstance(content, str):
+                        if isinstance(content, str) and content:
                             content_to_yield = content
                         else:
-                            content_to_yield = str(content) if content else None
+                            # This might be the final RunOutput
+                            run_response = chunk
                     elif hasattr(chunk, 'text'):
                         # Text attribute
                         content_to_yield = chunk.text if isinstance(chunk.text, str) else str(chunk.text) if chunk.text else None
@@ -688,26 +734,34 @@ class SelfImprovingResearchAgent:
                         # Direct string
                         content_to_yield = chunk
                     
-                    # Yield content if we have it
+                    # Yield content if we have it (filter out status-like messages)
                     if content_to_yield:
-                        accumulated_content += content_to_yield
-                        yield {
-                            'type': 'content',
-                            'content': content_to_yield,
-                            'done': False
-                        }
+                        # Filter out common status messages that should be shown as status, not content
+                        status_patterns = [
+                            r"^I'll search.*",
+                            r"^Let me search.*",
+                            r"^Let me try.*",
+                            r"^Searching for.*",
+                            r"^I'm searching.*"
+                        ]
+                        import re
+                        is_status_message = any(re.match(pattern, content_to_yield.strip(), re.IGNORECASE) for pattern in status_patterns)
+                        
+                        if not is_status_message:
+                            accumulated_content += content_to_yield
+                            yield {
+                                'type': 'content',
+                                'content': content_to_yield,
+                                'done': False
+                            }
                     
                     # Check if this is the final chunk (RunOutput)
-                    # Agno's final chunk is typically a RunOutput object, not a RunContentEvent
-                    if hasattr(chunk, 'content') and not hasattr(chunk, 'event'):
-                        # This might be the final RunOutput
-                        run_response = chunk
-                    elif hasattr(chunk, 'is_final') and chunk.is_final:
-                        run_response = chunk
-                    elif hasattr(chunk, '__class__') and 'RunOutput' in str(chunk.__class__):
-                        # Final RunOutput object
-                        run_response = chunk
-                        break
+                    if hasattr(chunk, '__class__'):
+                        class_name = str(chunk.__class__)
+                        if 'RunOutput' in class_name and not hasattr(chunk, 'event'):
+                            # Final RunOutput object
+                            run_response = chunk
+                            break
                 
                 # If we didn't get a final response object, get it from the last chunk
                 if not run_response:
@@ -751,6 +805,11 @@ class SelfImprovingResearchAgent:
                 # Extract tools used
                 if hasattr(run_response, 'tool_calls') and run_response.tool_calls:
                     tools_used = [tool.name if hasattr(tool, 'name') else str(tool) for tool in run_response.tool_calls]
+                elif hasattr(run_response, 'tools') and run_response.tools:
+                    if isinstance(run_response.tools, list):
+                        tools_used = [str(t) for t in run_response.tools]
+                    else:
+                        tools_used = [str(run_response.tools)]
             else:
                 sources = []
                 tools_used = []
@@ -863,6 +922,7 @@ class SelfImprovingResearchAgent:
                 for kb_source in run_response.knowledge_sources:
                     sources.append({
                         'type': 'rag',
+                        'identifier': 'RAG',
                         'url': getattr(kb_source, 'url', ''),
                         'title': getattr(kb_source, 'title', ''),
                         'source': 'Knowledge Base'
@@ -871,7 +931,8 @@ class SelfImprovingResearchAgent:
             # Extract from tool calls (web search URLs)
             if hasattr(run_response, 'tool_calls') and run_response.tool_calls:
                 for tool_call in run_response.tool_calls:
-                    if hasattr(tool_call, 'name') and 'duckduckgo' in tool_call.name.lower():
+                    tool_name = getattr(tool_call, 'name', str(tool_call)).lower()
+                    if 'duckduckgo' in tool_name or 'search' in tool_name:
                         # Extract URLs from web search results
                         if hasattr(tool_call, 'result') and tool_call.result:
                             if isinstance(tool_call.result, list):
@@ -882,6 +943,7 @@ class SelfImprovingResearchAgent:
                                         if url:
                                             sources.append({
                                                 'type': 'web_search',
+                                                'identifier': 'Web',
                                                 'url': url,
                                                 'title': title or url,
                                                 'source': 'DuckDuckGo Search'
@@ -892,6 +954,7 @@ class SelfImprovingResearchAgent:
                                 if url:
                                     sources.append({
                                         'type': 'web_search',
+                                        'identifier': 'Web',
                                         'url': url,
                                         'title': title or url,
                                         'source': 'DuckDuckGo Search'
@@ -902,9 +965,10 @@ class SelfImprovingResearchAgent:
                 # Check if knowledge was actually used in the response
                 # This is a heuristic - in a real implementation, Agno would track this
                 for kb_url in self.knowledge_urls:
-                    if kb_url not in [s['url'] for s in sources]:
+                    if kb_url not in [s.get('url', '') for s in sources]:
                         sources.append({
                             'type': 'rag',
+                            'identifier': 'RAG',
                             'url': kb_url,
                             'title': kb_url,
                             'source': 'Knowledge Base'
