@@ -39,12 +39,9 @@ from models import (
 
 # Import knowledge base modules for status check
 try:
-    from agno.knowledge.website import WebsiteKnowledgeBase
+    from agno.knowledge import Knowledge
 except ImportError:
-    try:
-        from agno.knowledge.url import UrlKnowledge as WebsiteKnowledgeBase
-    except ImportError:
-        WebsiteKnowledgeBase = None
+    Knowledge = None
 
 try:
     from agno.vectordb.lancedb import LanceDb, SearchType
@@ -53,9 +50,14 @@ except ImportError:
     SearchType = None
 
 try:
-    from agno.embedder.openai import OpenAIEmbedder
+    from agno.knowledge.embedder.openai import OpenAIEmbedder
 except ImportError:
     OpenAIEmbedder = None
+
+try:
+    from agno.knowledge.reader.website_reader import WebsiteReader
+except ImportError:
+    WebsiteReader = None
 
 # Load environment variables from root .env file
 # Try root directory first, then fallback to backend/.env
@@ -634,7 +636,7 @@ async def get_knowledge_base():
     try:
         # Check if knowledge base is enabled (has OpenAI key and modules)
         has_openai_key = bool(agent_instance.openai_api_key)
-        has_modules = bool(WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder)
+        has_modules = bool(Knowledge and LanceDb and OpenAIEmbedder and WebsiteReader)
         enabled = agent_instance.knowledge is not None and has_openai_key and has_modules
         urls = agent_instance.knowledge_urls if agent_instance.knowledge_urls else []
         
@@ -720,10 +722,10 @@ async def reload_knowledge_base():
                 detail="Cannot reload knowledge base: OpenAI API key not configured"
             )
         
-        if not (WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder):
+        if not (Knowledge and LanceDb and OpenAIEmbedder and WebsiteReader):
             raise HTTPException(
                 status_code=400,
-                detail="Cannot reload knowledge base: Required modules not available. Please ensure all dependencies are installed."
+                detail="Cannot reload knowledge base: Required modules not available. Please ensure all dependencies are installed (beautifulsoup4 may be missing)."
             )
         
         if not agent_instance.knowledge_urls:

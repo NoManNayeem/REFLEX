@@ -19,18 +19,16 @@ from agno.tools.duckduckgo import DuckDuckGoTools
 from agno.db.sqlite import SqliteDb
 
 # Try to import knowledge base components - handle different agno versions
-WebsiteKnowledgeBase = None
+Knowledge = None
 LanceDb = None
 SearchType = None
 OpenAIEmbedder = None
+WebsiteReader = None
 
 try:
-    from agno.knowledge.website import WebsiteKnowledgeBase
+    from agno.knowledge import Knowledge
 except ImportError:
-    try:
-        from agno.knowledge.url import UrlKnowledge as WebsiteKnowledgeBase
-    except ImportError:
-        logger.debug("Knowledge base module not available")
+    logger.debug("Knowledge class not available")
 
 try:
     from agno.vectordb.lancedb import LanceDb, SearchType
@@ -38,9 +36,14 @@ except ImportError:
     logger.debug("LanceDB module not available")
 
 try:
-    from agno.embedder.openai import OpenAIEmbedder
+    from agno.knowledge.embedder.openai import OpenAIEmbedder
 except ImportError:
     logger.debug("OpenAI embedder module not available")
+
+try:
+    from agno.knowledge.reader.website_reader import WebsiteReader
+except ImportError:
+    logger.debug("Website reader module not available")
 
 
 @dataclass
@@ -310,32 +313,46 @@ class SelfImprovingResearchAgent:
             self.knowledge_urls.append(url)
             self._save_knowledge_urls()
             
-            # Reinitialize knowledge base if available
-            if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder:
+            # Load URL into knowledge base if available
+            if self.knowledge:
                 try:
-                    # Create new knowledge base with all URLs
-                    self.knowledge = WebsiteKnowledgeBase(
-                        urls=self.knowledge_urls,
-                        vector_db=LanceDb(
-                            uri=self.lancedb_path,
-                            table_name="research_docs",
-                            search_type=SearchType.hybrid,
-                            embedder=OpenAIEmbedder(
-                                id="text-embedding-3-small",
-                                dimensions=1536,
-                                api_key=self.openai_api_key
-                            )
-                        )
-                    )
-                    # Load the new URL into the knowledge base
                     logger.info(f"Loading new URL into knowledge base: {url}")
-                    self.knowledge.load(upsert=True)
+                    self.knowledge.load(url=url, upsert=True)
                     # Reload agent with new knowledge
                     self.agent = self._create_agent()
                     logger.info(f"Added URL to knowledge base and synced: {url}")
                     return True
                 except Exception as e:
-                    logger.error(f"Error reinitializing knowledge base: {e}", exc_info=True)
+                    logger.error(f"Error loading URL into knowledge base: {e}", exc_info=True)
+                    return False
+            elif self.openai_api_key and Knowledge and LanceDb and OpenAIEmbedder and WebsiteReader:
+                # Initialize knowledge base if not already initialized
+                try:
+                    embedder = OpenAIEmbedder(
+                        id="text-embedding-3-small",
+                        api_key=self.openai_api_key
+                    )
+                    vector_db = LanceDb(
+                        uri=self.lancedb_path,
+                        table_name="research_docs",
+                        search_type=SearchType.hybrid,
+                        embedder=embedder
+                    )
+                    website_reader = WebsiteReader()
+                    self.knowledge = Knowledge(
+                        name="Research Knowledge Base",
+                        description="Knowledge base for research documents",
+                        vector_db=vector_db,
+                        readers={"url": website_reader, "website": website_reader}
+                    )
+                    # Load all URLs
+                    for u in self.knowledge_urls:
+                        self.knowledge.load(url=u, upsert=True)
+                    self.agent = self._create_agent()
+                    logger.info(f"Initialized and loaded knowledge base with {len(self.knowledge_urls)} URLs")
+                    return True
+                except Exception as e:
+                    logger.error(f"Error initializing knowledge base: {e}", exc_info=True)
                     return False
             return True
         return False
@@ -346,37 +363,26 @@ class SelfImprovingResearchAgent:
             self.knowledge_urls.remove(url)
             self._save_knowledge_urls()
             
-            # Reinitialize knowledge base
-            if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder:
+            # Note: We can't easily remove specific URLs from LanceDB without reindexing
+            # For now, we'll just update the list and reload if needed
+            if self.knowledge_urls and self.knowledge:
+                # Reload all remaining URLs to ensure sync
                 try:
-                    if self.knowledge_urls:
-                        logger.info(f"Recreating knowledge base with {len(self.knowledge_urls)} URLs (removed: {url})")
-                        self.knowledge = WebsiteKnowledgeBase(
-                            urls=self.knowledge_urls,
-                            vector_db=LanceDb(
-                                uri=self.lancedb_path,
-                                table_name="research_docs",
-                                search_type=SearchType.hybrid,
-                                embedder=OpenAIEmbedder(
-                                    id="text-embedding-3-small",
-                                    dimensions=1536,
-                                    api_key=self.openai_api_key
-                                )
-                            )
-                        )
-                        # Reload remaining URLs
-                        logger.info("Reloading remaining URLs into knowledge base...")
-                        self.knowledge.load(upsert=True)
-                    else:
-                        self.knowledge = None
-                        logger.info("Knowledge base cleared (no URLs remaining)")
-                    # Reload agent
+                    logger.info(f"Reloading knowledge base with {len(self.knowledge_urls)} remaining URLs (removed: {url})...")
+                    # Clear and reload
+                    for remaining_url in self.knowledge_urls:
+                        self.knowledge.load(url=remaining_url, upsert=True)
                     self.agent = self._create_agent()
                     logger.info(f"Removed URL from knowledge base: {url}")
                     return True
                 except Exception as e:
-                    logger.error(f"Error reinitializing knowledge base: {e}", exc_info=True)
+                    logger.error(f"Error reloading knowledge base: {e}", exc_info=True)
                     return True  # Still return True so URL is removed from list
+            elif not self.knowledge_urls:
+                # No URLs left, but keep knowledge base initialized
+                logger.info("No URLs remaining in knowledge base")
+                self.agent = self._create_agent()
+                return True
             return True
         return False
     
@@ -386,7 +392,7 @@ class SelfImprovingResearchAgent:
             logger.warning("Cannot reload knowledge base: OpenAI API key not available")
             return False
         
-        if not (WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder):
+        if not (Knowledge and LanceDb and OpenAIEmbedder and WebsiteReader):
             logger.warning("Cannot reload knowledge base: Required modules not available")
             return False
         
@@ -396,22 +402,34 @@ class SelfImprovingResearchAgent:
         
         try:
             logger.info(f"Reloading knowledge base with {len(self.knowledge_urls)} URLs...")
+            
             # Reinitialize knowledge base to ensure sync
-            self.knowledge = WebsiteKnowledgeBase(
-                urls=self.knowledge_urls,
-                vector_db=LanceDb(
-                    uri=self.lancedb_path,
-                    table_name="research_docs",
-                    search_type=SearchType.hybrid,
-                    embedder=OpenAIEmbedder(
-                        id="text-embedding-3-small",
-                        dimensions=1536,
-                        api_key=self.openai_api_key
-                    )
-                )
+            embedder = OpenAIEmbedder(
+                id="text-embedding-3-small",
+                api_key=self.openai_api_key
             )
+            vector_db = LanceDb(
+                uri=self.lancedb_path,
+                table_name="research_docs",
+                search_type=SearchType.hybrid,
+                embedder=embedder
+            )
+            website_reader = WebsiteReader()
+            self.knowledge = Knowledge(
+                name="Research Knowledge Base",
+                description="Knowledge base for research documents",
+                vector_db=vector_db,
+                readers={"url": website_reader, "website": website_reader}
+            )
+            
             # Load all URLs
-            self.knowledge.load(upsert=True)
+            for url in self.knowledge_urls:
+                try:
+                    self.knowledge.load(url=url, upsert=True)
+                    logger.debug(f"Reloaded URL: {url}")
+                except Exception as e:
+                    logger.warning(f"Failed to reload URL {url}: {e}")
+            
             # Reload agent
             self.agent = self._create_agent()
             logger.info("Knowledge base reloaded and synced successfully")
