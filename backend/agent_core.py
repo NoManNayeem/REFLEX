@@ -593,7 +593,7 @@ class SelfImprovingResearchAgent:
         user_id: Optional[str] = None
     ):
         """
-        Execute a research task with streaming response
+        Execute a research task with streaming response using Agno's native streaming
         Yields chunks of the response as they are generated
         """
         logger.info(f"Running streaming task: session_id={session_id}, query_length={len(query)}")
@@ -621,112 +621,151 @@ class SelfImprovingResearchAgent:
             'relevant_skills': [s.name for s in relevant_skills]
         }
         
-        # Try to use model's streaming capability
+        # Use Agno's native streaming
         try:
-            # Check if agent's model supports streaming
-            model = self.agent.model
-            if hasattr(model, 'stream') or hasattr(model, 'stream_response'):
-                logger.debug("Using model streaming capability...")
-                
-                # Use agent's run with streaming
-                # Agno's Agent.run() may support streaming through the model
-                # We'll need to check the actual implementation
-                # For now, we'll use a workaround: run the agent and stream the response
-                
-                # Run agent (this might block, but we'll handle it)
-                import asyncio
-                loop = asyncio.get_event_loop()
-                run_response = await loop.run_in_executor(
-                    None,
-                    lambda: self.agent.run(
-                        enhanced_query,
-                        session_id=session_id,
-                        user_id=user_id
-                    )
+            import asyncio
+            accumulated_content = ""
+            run_response = None
+            tools_used = []
+            
+            # Use agent.run with stream=True to get real-time streaming
+            logger.debug("Starting Agno agent streaming...")
+            
+            # Run agent with streaming enabled
+            loop = asyncio.get_event_loop()
+            
+            # Check if agent.run supports streaming
+            # Agno's run() with stream=True returns an iterator/generator
+            stream_result = await loop.run_in_executor(
+                None,
+                lambda: self.agent.run(
+                    enhanced_query,
+                    session_id=session_id,
+                    user_id=user_id,
+                    stream=True
                 )
+            )
+            
+            # Process streaming chunks from Agno
+            if hasattr(stream_result, '__iter__'):
+                logger.debug("Processing streaming chunks from Agno...")
                 
-                # Stream the response content
-                content = run_response.content if run_response.content else ""
-                logger.info(f"Agent response received: length={len(content)}, streaming chunks...")
+                # Convert sync iterator to async
+                def sync_iter():
+                    try:
+                        for chunk in stream_result:
+                            yield chunk
+                    except Exception as e:
+                        logger.error(f"Error in sync iterator: {e}", exc_info=True)
                 
-                # Stream content in chunks (simulate real streaming by chunking)
-                # In a real implementation, this would come from the model's stream
-                chunk_size = 20  # Characters per chunk
-                accumulated_content = ""
-                
-                for i in range(0, len(content), chunk_size):
-                    chunk = content[i:i + chunk_size]
-                    accumulated_content += chunk
+                # Process chunks
+                for chunk in sync_iter():
+                    # Check chunk type - Agno may yield different types
+                    if hasattr(chunk, 'content'):
+                        # Direct content chunk
+                        content = chunk.content or ""
+                        if content:
+                            accumulated_content += content
+                            yield {
+                                'type': 'content',
+                                'content': content,
+                                'done': False
+                            }
+                    elif hasattr(chunk, 'text'):
+                        # Text chunk
+                        content = chunk.text or ""
+                        if content:
+                            accumulated_content += content
+                            yield {
+                                'type': 'content',
+                                'content': content,
+                                'done': False
+                            }
+                    elif isinstance(chunk, str):
+                        # String chunk
+                        accumulated_content += chunk
+                        yield {
+                            'type': 'content',
+                            'content': chunk,
+                            'done': False
+                        }
+                    elif hasattr(chunk, 'event'):
+                        # Event-based chunk
+                        if chunk.event == 'content' or chunk.event == 'text':
+                            content = getattr(chunk, 'content', getattr(chunk, 'text', ''))
+                            if content:
+                                accumulated_content += content
+                                yield {
+                                    'type': 'content',
+                                    'content': content,
+                                    'done': False
+                                }
                     
-                    yield {
-                        'type': 'content',
-                        'content': chunk,
-                        'done': False,
-                        'accumulated': accumulated_content
-                    }
-                    
-                    # Small delay to simulate real streaming
-                    await asyncio.sleep(0.02)
+                    # Check if this is the final chunk
+                    if hasattr(chunk, 'done') and chunk.done:
+                        run_response = chunk
+                        break
+                    elif hasattr(chunk, 'is_final') and chunk.is_final:
+                        run_response = chunk
+                        break
                 
-                # Extract sources
-                sources = self._extract_sources(run_response)
-                
-                # Final chunk with metadata
-                yield {
-                    'type': 'done',
-                    'content': '',
-                    'done': True,
-                    'accumulated': accumulated_content,
-                    'tools_used': [],
-                    'relevant_skills': [s.name for s in relevant_skills],
-                    'sources': sources,
-                    'full_response': run_response
-                }
+                # If we didn't get a final response object, get it from the last chunk
+                if not run_response:
+                    # Try to get the full response
+                    try:
+                        # Run again without streaming to get full response for metadata
+                        run_response = await loop.run_in_executor(
+                            None,
+                            lambda: self.agent.run(
+                                enhanced_query,
+                                session_id=session_id,
+                                user_id=user_id
+                            )
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not get full response for metadata: {e}")
                 
             else:
-                # Fallback: run normally and stream the result
-                logger.debug("Model doesn't support streaming, using fallback...")
-                import asyncio
-                loop = asyncio.get_event_loop()
-                run_response = await loop.run_in_executor(
-                    None,
-                    lambda: self.agent.run(
-                        enhanced_query,
-                        session_id=session_id,
-                        user_id=user_id
-                    )
-                )
-                
-                content = run_response.content if run_response.content else ""
+                # Fallback: if stream=True doesn't return iterator, use word-by-word chunking
+                logger.debug("Stream result is not iterable, using fallback chunking...")
+                run_response = stream_result
+                content = run_response.content if hasattr(run_response, 'content') and run_response.content else str(stream_result)
                 
                 # Stream word by word for better UX
                 words = content.split()
                 accumulated_content = ""
                 
-                for i, word in enumerate(words):
+                for word in words:
                     accumulated_content += word + " "
                     yield {
                         'type': 'content',
                         'content': word + " ",
-                        'done': False,
-                        'accumulated': accumulated_content
+                        'done': False
                     }
-                    await asyncio.sleep(0.03)
-                
-                # Extract sources
+                    await asyncio.sleep(0.02)
+            
+            # Extract sources and tools from final response
+            if run_response:
                 sources = self._extract_sources(run_response)
                 
-                # Final yield with metadata
-                yield {
-                    'type': 'done',
-                    'content': '',
-                    'done': True,
-                    'accumulated': accumulated_content,
-                    'tools_used': [],
-                    'relevant_skills': [s.name for s in relevant_skills],
-                    'sources': sources,
-                    'full_response': run_response
-                }
+                # Extract tools used
+                if hasattr(run_response, 'tool_calls') and run_response.tool_calls:
+                    tools_used = [tool.name if hasattr(tool, 'name') else str(tool) for tool in run_response.tool_calls]
+            else:
+                sources = []
+                tools_used = []
+            
+            # Final chunk with metadata
+            yield {
+                'type': 'done',
+                'content': '',
+                'done': True,
+                'accumulated': accumulated_content,
+                'tools_used': tools_used,
+                'relevant_skills': [s.name for s in relevant_skills],
+                'sources': sources,
+                'full_response': run_response
+            }
                 
         except Exception as e:
             logger.error(f"Error in streaming task: {str(e)}", exc_info=True)

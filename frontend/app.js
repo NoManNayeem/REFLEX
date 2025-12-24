@@ -604,9 +604,12 @@ async function sendMessage() {
                             relevantSkills = data.relevant_skills || [];
                             const sources = data.sources || [];
                             
+                            // Use accumulated content from done event if available, otherwise use our accumulated
+                            const finalContent = data.accumulated || accumulatedContent;
+                            
                             // Replace streaming message with final message
                             if (agentMessageId) {
-                                replaceStreamingMessage(agentMessageId, accumulatedContent, {
+                                replaceStreamingMessage(agentMessageId, finalContent, {
                                     tools: toolsUsed,
                                     skills: relevantSkills,
                                     sources: sources
@@ -614,7 +617,7 @@ async function sendMessage() {
                             } else {
                                 // Fallback: create message if streaming didn't work
                                 removeLoadingMessage(loadingId);
-                                addMessage('agent', accumulatedContent, {
+                                addMessage('agent', finalContent, {
                                     tools: toolsUsed,
                                     skills: relevantSkills,
                                     sources: sources
