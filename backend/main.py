@@ -713,6 +713,25 @@ async def reload_knowledge_base():
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
     try:
+        # Check if knowledge base can be reloaded
+        if not agent_instance.openai_api_key:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot reload knowledge base: OpenAI API key not configured"
+            )
+        
+        if not (WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder):
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot reload knowledge base: Required modules not available. Please ensure all dependencies are installed."
+            )
+        
+        if not agent_instance.knowledge_urls:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot reload knowledge base: No URLs configured. Please add URLs first."
+            )
+        
         success = agent_instance.reload_knowledge_base()
         if success:
             return {
@@ -720,9 +739,14 @@ async def reload_knowledge_base():
                 "message": "Knowledge base reloaded successfully"
             }
         else:
-            raise HTTPException(status_code=400, detail="Failed to reload knowledge base")
+            raise HTTPException(
+                status_code=500, 
+                detail="Failed to reload knowledge base. Check logs for details."
+            )
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error reloading knowledge base: {e}")
+        logger.error(f"Error reloading knowledge base: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error reloading: {str(e)}")
 
 

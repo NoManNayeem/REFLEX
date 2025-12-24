@@ -382,33 +382,43 @@ class SelfImprovingResearchAgent:
     
     def reload_knowledge_base(self) -> bool:
         """Reload the knowledge base - reinitialize and load all URLs"""
-        if self.openai_api_key and WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder and self.knowledge_urls:
-            try:
-                logger.info(f"Reloading knowledge base with {len(self.knowledge_urls)} URLs...")
-                # Reinitialize knowledge base to ensure sync
-                self.knowledge = WebsiteKnowledgeBase(
-                    urls=self.knowledge_urls,
-                    vector_db=LanceDb(
-                        uri=self.lancedb_path,
-                        table_name="research_docs",
-                        search_type=SearchType.hybrid,
-                        embedder=OpenAIEmbedder(
-                            id="text-embedding-3-small",
-                            dimensions=1536,
-                            api_key=self.openai_api_key
-                        )
+        if not self.openai_api_key:
+            logger.warning("Cannot reload knowledge base: OpenAI API key not available")
+            return False
+        
+        if not (WebsiteKnowledgeBase and LanceDb and OpenAIEmbedder):
+            logger.warning("Cannot reload knowledge base: Required modules not available")
+            return False
+        
+        if not self.knowledge_urls:
+            logger.warning("Cannot reload knowledge base: No URLs configured")
+            return False
+        
+        try:
+            logger.info(f"Reloading knowledge base with {len(self.knowledge_urls)} URLs...")
+            # Reinitialize knowledge base to ensure sync
+            self.knowledge = WebsiteKnowledgeBase(
+                urls=self.knowledge_urls,
+                vector_db=LanceDb(
+                    uri=self.lancedb_path,
+                    table_name="research_docs",
+                    search_type=SearchType.hybrid,
+                    embedder=OpenAIEmbedder(
+                        id="text-embedding-3-small",
+                        dimensions=1536,
+                        api_key=self.openai_api_key
                     )
                 )
-                # Load all URLs
-                self.knowledge.load(upsert=True)
-                # Reload agent
-                self.agent = self._create_agent()
-                logger.info("Knowledge base reloaded and synced successfully")
-                return True
-            except Exception as e:
-                logger.error(f"Error reloading knowledge base: {e}", exc_info=True)
-                return False
-        return False
+            )
+            # Load all URLs
+            self.knowledge.load(upsert=True)
+            # Reload agent
+            self.agent = self._create_agent()
+            logger.info("Knowledge base reloaded and synced successfully")
+            return True
+        except Exception as e:
+            logger.error(f"Error reloading knowledge base: {e}", exc_info=True)
+            return False
     
     def clear_knowledge_base(self) -> bool:
         """Clear all knowledge base URLs"""

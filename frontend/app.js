@@ -278,7 +278,7 @@ async function loadConversations() {
 }
 
 // Render a conversation item
-function renderConversationItem(conversation, isActive = false) {
+function renderConversationItem(conversation, isActive = false, appendToList = true) {
     const item = document.createElement('div');
     item.className = `conversation-item ${isActive ? 'active' : ''}`;
     item.dataset.sessionId = conversation.session_id;
@@ -308,7 +308,11 @@ function renderConversationItem(conversation, isActive = false) {
         switchConversation(conversation.session_id);
     });
     
-    elements.conversationsList.appendChild(item);
+    if (appendToList && elements.conversationsList) {
+        elements.conversationsList.appendChild(item);
+    }
+    
+    return item;
 }
 
 // Get time ago string
@@ -383,9 +387,15 @@ function createNewConversation() {
         item.classList.remove('active');
     });
     
-    // Add new conversation at the top
-    const newItem = renderConversationItem(newConv, true);
-    elements.conversationsList.insertBefore(newItem, elements.conversationsList.firstChild);
+    // Add new conversation at the top (don't append automatically)
+    const newItem = renderConversationItem(newConv, true, false);
+    if (elements.conversationsList && newItem) {
+        if (elements.conversationsList.firstChild) {
+            elements.conversationsList.insertBefore(newItem, elements.conversationsList.firstChild);
+        } else {
+            elements.conversationsList.appendChild(newItem);
+        }
+    }
 }
 
 // Create conversation element (helper function)
