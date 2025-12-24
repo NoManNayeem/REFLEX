@@ -712,6 +712,12 @@ class SelfImprovingResearchAgent:
                         # This is a RunContentEvent
                         if chunk.event == 'RunContent' or chunk.event == 'content':
                             content = chunk.content
+                            
+                            # Skip reasoning content - it's internal thinking
+                            if hasattr(chunk, 'reasoning_content') and chunk.reasoning_content:
+                                # This is reasoning, not the final response - skip it
+                                continue
+                            
                             if content:
                                 # Content might be string or other type
                                 if isinstance(content, str):
@@ -734,18 +740,31 @@ class SelfImprovingResearchAgent:
                         # Direct string
                         content_to_yield = chunk
                     
-                    # Yield content if we have it (filter out status-like messages)
+                    # Yield content if we have it (filter out status-like messages and internal details)
                     if content_to_yield:
+                        import re
+                        
                         # Filter out common status messages that should be shown as status, not content
                         status_patterns = [
                             r"^I'll search.*",
                             r"^Let me search.*",
                             r"^Let me try.*",
                             r"^Searching for.*",
-                            r"^I'm searching.*"
+                            r"^I'm searching.*",
+                            r"^details about.*:.*search.*",
+                            r"^.*: search.*",
                         ]
-                        import re
                         is_status_message = any(re.match(pattern, content_to_yield.strip(), re.IGNORECASE) for pattern in status_patterns)
+                        
+                        # Filter out tool execution details and internal reasoning
+                        if 'ToolExecution' in content_to_yield or 'tool_call_id' in content_to_yield:
+                            # This is tool execution metadata - skip it
+                            continue
+                        
+                        # Filter out patterns that look like internal reasoning
+                        if re.search(r'^[^:]+:\s*(search|find|look)', content_to_yield.strip(), re.IGNORECASE):
+                            # Looks like internal reasoning format "topic: search..."
+                            continue
                         
                         if not is_status_message:
                             accumulated_content += content_to_yield
