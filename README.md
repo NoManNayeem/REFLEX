@@ -23,7 +23,10 @@ A functional proof-of-concept demonstrating a self-improving AI agent using **Re
 - **Skill Visualization**: Interactive skill library browser
 - **Feedback System**: Intuitive reward mechanism
 - **Dark/Light Mode**: Theme toggle with localStorage persistence
+- **Dark/Light Mode**: Theme toggle with localStorage persistence
 - **Responsive Design**: Works on desktop and mobile
+- **Thinking Process UI**: Visualize agent's internal reasoning steps
+- **Temporal Awareness**: Agent knows current date and time for accurate research
 
 ### 🔧 Technical Stack
 - **Backend**: FastAPI + Python 3.10+
@@ -31,6 +34,11 @@ A functional proof-of-concept demonstrating a self-improving AI agent using **Re
 - **LLM**: Claude Sonnet 4
 - **Vector DB**: LanceDB with hybrid search
 - **Storage**: SQLite for sessions and memory
+- **Security**: 
+  - Rate limiting (slowapi)
+  - XSS protection (DOMPurify)
+  - Input validation (Pydantic)
+  - CORS strict origin policies
 - **Frontend**: Pure HTML/CSS/JavaScript (no framework overhead)
 
 ## 🚀 Quick Start
@@ -1008,6 +1016,8 @@ sequenceDiagram
 - ✅ Markdown formatting
 - ✅ Tool call visibility
 - ✅ Skill usage display
+- ✅ **Thinking Process**: Collapsible step-by-step reasoning view
+- ✅ **Temporal Context**: Shows current datetime in prompts
 - ✅ Loading indicators
 - ✅ Auto-scroll
 
