@@ -14,3 +14,9 @@ sqlalchemy>=2.0.0
 beautifulsoup4
 tantivy
 
+# Security & Validation
+slowapi==0.1.9
+validators==0.22.0
+pydantic-settings==2.1.0
+
+pandas

@@ -1,0 +1,202 @@
+/* ==================== NOTIFICATION BANNERS ==================== */
+
+/* Error Banner */
+.error-banner {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--danger);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+    max-width: 400px;
+    min-width: 300px;
+}
+
+.error-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.error-content i {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.error-text {
+    flex: 1;
+}
+
+.error-text strong {
+    display: block;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.error-text p {
+    font-size: 0.9375rem;
+    margin: 0;
+}
+
+.error-text small {
+    display: block;
+    font-size: 0.8125rem;
+    margin-top: 0.5rem;
+    opacity: 0.9;
+}
+
+.close-error {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.25rem;
+    margin-left: auto;
+    font-size: 1.125rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.close-error:hover {
+    opacity: 1;
+}
+
+/* Warning Banner */
+.warning-banner {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--warning);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+    max-width: 400px;
+    min-width: 300px;
+}
+
+.warning-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.warning-content i {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.warning-text {
+    flex: 1;
+}
+
+.warning-text strong {
+    display: block;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.warning-text p {
+    font-size: 0.9375rem;
+    margin: 0;
+}
+
+.close-warning {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.25rem;
+    margin-left: auto;
+    font-size: 1.125rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.close-warning:hover {
+    opacity: 1;
+}
+
+/* Success Banner */
+.success-banner {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--success);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    z-index: 10000;
+    animation: slideInRight 0.3s ease;
+    max-width: 400px;
+    min-width: 300px;
+}
+
+.success-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.success-content i {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.125rem;
+}
+
+.success-text {
+    flex: 1;
+}
+
+.success-text p {
+    font-size: 0.9375rem;
+    margin: 0;
+}
+
+.close-success {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0.25rem;
+    margin-left: auto;
+    font-size: 1.125rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.close-success:hover {
+    opacity: 1;
+}
+
+/* Slide in animation */
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Stack multiple banners */
+.error-banner:not(:first-of-type),
+.warning-banner:not(:first-of-type),
+.success-banner:not(:first-of-type) {
+    top: calc(20px + (var(--banner-index, 0) * 100px));
+}

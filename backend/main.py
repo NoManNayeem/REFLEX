@@ -11,16 +11,23 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-# Configure logging
+# Import configuration and security
+from config import settings
+from security import SecurityValidator
+
+# Configure logging with settings
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, settings.log_level),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -126,16 +133,23 @@ app = FastAPI(
     title="REFLEX API",
     description="Research Engine with Feedback-Driven Learning - API for interacting with an RL-based self-improving research agent",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    debug=settings.debug
 )
 
-# Add CORS middleware
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add CORS middleware with security
+logger.info(f"CORS origins: {settings.cors_origins_list}")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify actual origins
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE", "PUT"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 
@@ -170,19 +184,37 @@ async def agent_status():
 
 
 @app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def chat(request: Request, chat_request: ChatRequest):
     """
     Send a message to the agent and get a response
     """
-    logger.info(f"Received chat request: session_id={request.session_id}, message_length={len(request.message)}")
+    # Validate input
+    if not chat_request.message or not chat_request.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    
+    if len(chat_request.message) > settings.max_message_length:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Message exceeds maximum length of {settings.max_message_length} characters"
+        )
+    
+    # Validate session and user IDs if provided
+    if chat_request.session_id and not SecurityValidator.validate_session_id(chat_request.session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+    
+    if chat_request.user_id and not SecurityValidator.validate_user_id(chat_request.user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+    
+    logger.info(f"Received chat request: session_id={chat_request.session_id}, message_length={len(chat_request.message)}")
     
     if not agent_instance:
         logger.error("Agent not initialized when chat request received")
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
     try:
-        session_id = request.session_id or "default"
-        user_id = request.user_id or "default_user"
+        session_id = chat_request.session_id or "default"
+        user_id = chat_request.user_id or "default_user"
         
         # Store user message
         if conversation_db:
@@ -190,12 +222,12 @@ async def chat(request: ChatRequest):
                 session_id=session_id,
                 user_id=user_id,
                 role="user",
-                content=request.message
+                content=chat_request.message
             )
         
-        logger.debug(f"Processing message: {request.message[:100]}...")
+        logger.debug(f"Processing message: {chat_request.message[:100]}...")
         result = agent_instance.run_task(
-            query=request.message,
+            query=chat_request.message,
             session_id=session_id,
             user_id=user_id
         )
@@ -238,19 +270,37 @@ async def chat(request: ChatRequest):
 
 
 @app.post("/api/chat/stream")
-async def chat_stream(request: ChatRequest):
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def chat_stream(request: Request, chat_request: ChatRequest):
     """
     Stream agent response using Server-Sent Events (SSE)
     Uses Agno's streaming capabilities for real-time response generation
     """
-    logger.info(f"Received stream request: session_id={request.session_id}, message_length={len(request.message)}")
+    # Validate input
+    if not chat_request.message or not chat_request.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    
+    if len(chat_request.message) > settings.max_message_length:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Message exceeds maximum length of {settings.max_message_length} characters"
+        )
+    
+    # Validate session and user IDs
+    if chat_request.session_id and not SecurityValidator.validate_session_id(chat_request.session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+    
+    if chat_request.user_id and not SecurityValidator.validate_user_id(chat_request.user_id):
+        raise HTTPException(status_code=400, detail="Invalid user ID format")
+    
+    logger.info(f"Received stream request: session_id={chat_request.session_id}, message_length={len(chat_request.message)}")
     
     if not agent_instance:
         logger.error("Agent not initialized when stream request received")
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
-    session_id = request.session_id or "default"
-    user_id = request.user_id or "default_user"
+    session_id = chat_request.session_id or "default"
+    user_id = chat_request.user_id or "default_user"
     
     async def event_generator():
         full_response_content = ""
@@ -265,7 +315,7 @@ async def chat_stream(request: ChatRequest):
                     session_id=session_id,
                     user_id=user_id,
                     role="user",
-                    content=request.message
+                    content=chat_request.message
                 )
             
             # Send initial status
@@ -275,11 +325,11 @@ async def chat_stream(request: ChatRequest):
             yield f"data: {json.dumps({'type': 'status', 'status': 'searching', 'message': 'Searching for information...'})}\n\n"
             await asyncio.sleep(0.05)
             
-            logger.debug(f"Starting real stream for message: {request.message[:100]}...")
+            logger.debug(f"Starting real stream for message: {chat_request.message[:100]}...")
             
             # Use the agent's streaming method
             async for chunk in agent_instance.run_task_stream(
-                query=request.message,
+                query=chat_request.message,
                 session_id=session_id,
                 user_id=user_id
             ):
@@ -662,16 +712,21 @@ async def get_knowledge_base():
 
 
 @app.post("/api/knowledge/urls")
-async def add_knowledge_url(request: Dict[str, str]):
+@limiter.limit(f"{settings.rate_limit_per_minute}/minute")
+async def add_knowledge_url(request: Request, url_request: Dict[str, str]):
     """
     Add a URL to the knowledge base
     """
     if not agent_instance:
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
-    url = request.get('url')
+    url = url_request.get('url')
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
+    
+    # Validate URL
+    if not SecurityValidator.validate_url(url):
+        raise HTTPException(status_code=400, detail="Invalid or unsafe URL")
     
     try:
         success = agent_instance.add_knowledge_url(url)

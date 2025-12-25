@@ -10,6 +10,7 @@ import re
 from typing import List, Dict, Optional, Any
 from dataclasses import dataclass, asdict
 import numpy as np
+from datetime import datetime
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -281,7 +282,7 @@ class SelfImprovingResearchAgent:
                     logger.info(f"Loading {len(self.knowledge_urls)} URLs into knowledge base...")
                     for url in self.knowledge_urls:
                         try:
-                            self.knowledge.load(url=url, upsert=True)
+                            self.knowledge.add_content(url=url)
                             logger.debug(f"Loaded URL: {url}")
                         except Exception as e:
                             logger.warning(f"Failed to load URL {url}: {e}")
@@ -365,7 +366,7 @@ class SelfImprovingResearchAgent:
             if self.knowledge:
                 try:
                     logger.info(f"Loading new URL into knowledge base: {url}")
-                    self.knowledge.load(url=url, upsert=True)
+                    self.knowledge.add_content(url=url)
                     # Reload agent with new knowledge
                     self.agent = self._create_agent()
                     logger.info(f"Added URL to knowledge base and synced: {url}")
@@ -395,7 +396,7 @@ class SelfImprovingResearchAgent:
                     )
                     # Load all URLs
                     for u in self.knowledge_urls:
-                        self.knowledge.load(url=u, upsert=True)
+                        self.knowledge.add_content(url=u)
                     self.agent = self._create_agent()
                     logger.info(f"Initialized and loaded knowledge base with {len(self.knowledge_urls)} URLs")
                     return True
@@ -419,7 +420,7 @@ class SelfImprovingResearchAgent:
                     logger.info(f"Reloading knowledge base with {len(self.knowledge_urls)} remaining URLs (removed: {url})...")
                     # Clear and reload
                     for remaining_url in self.knowledge_urls:
-                        self.knowledge.load(url=remaining_url, upsert=True)
+                        self.knowledge.add_content(url=remaining_url)
                     self.agent = self._create_agent()
                     logger.info(f"Removed URL from knowledge base: {url}")
                     return True
@@ -473,7 +474,7 @@ class SelfImprovingResearchAgent:
             # Load all URLs
             for url in self.knowledge_urls:
                 try:
-                    self.knowledge.load(url=url, upsert=True)
+                    self.knowledge.add_content(url=url)
                     logger.debug(f"Reloaded URL: {url}")
                 except Exception as e:
                     logger.warning(f"Failed to reload URL {url}: {e}")
@@ -554,6 +555,10 @@ class SelfImprovingResearchAgent:
             enhanced_query = query + skill_text
         else:
             enhanced_query = query
+            
+        # Add current datetime context
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        enhanced_query = f"Current Date and Time: {current_time}\n\n{enhanced_query}"
         
         # Run the agent
         logger.debug("Calling agent.run()...")
@@ -594,8 +599,10 @@ class SelfImprovingResearchAgent:
         user_id: Optional[str] = None
     ):
         """
-        Execute a research task with streaming response using Agno's native streaming
+        Execute a research task with streaming response using Agno's native async streaming
         Yields chunks of the response as they are generated
+        
+        Uses agent.arun(stream=True) which returns AsyncIterator[RunOutputEvent]
         """
         logger.info(f"Running streaming task: session_id={session_id}, query_length={len(query)}")
         
@@ -611,235 +618,126 @@ class SelfImprovingResearchAgent:
             enhanced_query = query + skill_text
         else:
             enhanced_query = query
+            
+        # Add current datetime context
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        enhanced_query = f"Current Date and Time: {current_time}\n\n{enhanced_query}"
         
-        # Prepare trajectory info
-        trajectory = {
-            'query': query,
-            'response': '',
-            'tools_used': [],
-            'session_id': session_id,
-            'user_id': user_id,
-            'relevant_skills': [s.name for s in relevant_skills]
-        }
-        
-        # Use Agno's native streaming
         try:
-            import asyncio
             accumulated_content = ""
             run_response = None
             tools_used = []
             
-            # Use agent.run with stream=True to get real-time streaming
-            logger.debug("Starting Agno agent streaming...")
+            logger.debug("Starting Agno native async streaming with arun()...")
             
-            # Run agent with streaming enabled
-            loop = asyncio.get_event_loop()
-            
-            # Check if agent.run supports streaming
-            # Agno's run() with stream=True returns an iterator/generator
-            stream_result = await loop.run_in_executor(
-                None,
-                lambda: self.agent.run(
-                    enhanced_query,
-                    session_id=session_id,
-                    user_id=user_id,
-                    stream=True
-                )
-            )
-            
-            # Process streaming chunks from Agno
-            if hasattr(stream_result, '__iter__'):
-                logger.debug("Processing streaming chunks from Agno...")
+            # Use Agno's native async streaming with arun(stream=True)
+            # This returns an AsyncIterator[RunOutputEvent]
+            async for event in self.agent.arun(
+                enhanced_query,
+                session_id=session_id,
+                user_id=user_id,
+                stream=True
+            ):
+                # Process RunOutputEvent objects
+                # Each event has an 'event' attribute and possibly 'content'
                 
-                # Convert sync iterator to async
-                def sync_iter():
-                    try:
-                        for chunk in stream_result:
-                            yield chunk
-                    except Exception as e:
-                        logger.error(f"Error in sync iterator: {e}", exc_info=True)
-                
-                # Process chunks - Agno yields RunContentEvent objects
-                last_tool_status = None
-                for chunk in sync_iter():
-                    # Check for tool calls or tool-related events
-                    if hasattr(chunk, 'event'):
-                        event_type = chunk.event
+                try:
+                    event_type = getattr(event, 'event', None)
+                    
+                    # Handle different event types
+                    if event_type == 'RunContent':
+                        # This is actual content to stream
+                        content = getattr(event, 'content', None)
                         
-                        # Detect tool calls - check for tools attribute or tool-related events
-                        if hasattr(chunk, 'tools') and chunk.tools:
-                            # Tool is being called
-                            tool_names = []
-                            if isinstance(chunk.tools, list):
-                                tool_names = [str(t) for t in chunk.tools]
-                            elif hasattr(chunk.tools, '__iter__'):
-                                tool_names = [str(t) for t in chunk.tools]
-                            
-                            # Generate status message for tool usage
-                            for tool_name in tool_names:
-                                if 'duckduckgo' in tool_name.lower() or 'search' in tool_name.lower():
-                                    status_msg = "Searching the web for information..."
-                                    if status_msg != last_tool_status:
-                                        yield {
-                                            'type': 'status',
-                                            'status': 'searching',
-                                            'message': status_msg
-                                        }
-                                        last_tool_status = status_msg
-                                elif 'knowledge' in tool_name.lower() or 'rag' in tool_name.lower():
-                                    status_msg = "Searching knowledge base..."
-                                    if status_msg != last_tool_status:
-                                        yield {
-                                            'type': 'status',
-                                            'status': 'searching',
-                                            'message': status_msg
-                                        }
-                                        last_tool_status = status_msg
-                                else:
-                                    status_msg = f"Using {tool_name}..."
-                                    if status_msg != last_tool_status:
-                                        yield {
-                                            'type': 'status',
-                                            'status': 'tool_use',
-                                            'message': status_msg
-                                        }
-                                        last_tool_status = status_msg
-                    
-                    # Handle content chunks
-                    content_to_yield = None
-                    
-                    # Handle RunContentEvent objects (Agno's streaming format)
-                    if hasattr(chunk, 'content') and hasattr(chunk, 'event'):
-                        # This is a RunContentEvent
-                        if chunk.event == 'RunContent' or chunk.event == 'content':
-                            content = chunk.content
-                            
-                            # Skip reasoning content - it's internal thinking
-                            if hasattr(chunk, 'reasoning_content') and chunk.reasoning_content:
-                                # This is reasoning, not the final response - skip it
+                        # Skip reasoning content (internal thinking)
+                        if hasattr(event, 'reasoning_content') and event.reasoning_content:
+                            continue
+                        
+                        if content and isinstance(content, str) and content.strip():
+                            # Filter out tool execution messages
+                            if 'ToolExecution' in content or 'tool_call_id' in content:
                                 continue
                             
-                            if content:
-                                # Content might be string or other type
-                                if isinstance(content, str):
-                                    content_to_yield = content
-                                else:
-                                    # Try to convert to string
-                                    content_to_yield = str(content)
-                    elif hasattr(chunk, 'content') and not hasattr(chunk, 'event'):
-                        # Direct content attribute (might be RunOutput)
-                        content = chunk.content
-                        if isinstance(content, str) and content:
-                            content_to_yield = content
-                        else:
-                            # This might be the final RunOutput
-                            run_response = chunk
-                    elif hasattr(chunk, 'text'):
-                        # Text attribute
-                        content_to_yield = chunk.text if isinstance(chunk.text, str) else str(chunk.text) if chunk.text else None
-                    elif isinstance(chunk, str):
-                        # Direct string
-                        content_to_yield = chunk
-                    
-                    # Yield content if we have it (filter out status-like messages and internal details)
-                    if content_to_yield:
-                        # Filter out common status messages that should be shown as status, not content
-                        status_patterns = [
-                            r"^I'll search.*",
-                            r"^Let me search.*",
-                            r"^Let me try.*",
-                            r"^Searching for.*",
-                            r"^I'm searching.*",
-                            r"^details about.*:.*search.*",
-                            r"^.*: search.*",
-                        ]
-                        is_status_message = any(re.match(pattern, content_to_yield.strip(), re.IGNORECASE) for pattern in status_patterns)
-                        
-                        # Filter out tool execution details and internal reasoning
-                        if 'ToolExecution' in content_to_yield or 'tool_call_id' in content_to_yield:
-                            # This is tool execution metadata - skip it
-                            continue
-                        
-                        # Filter out patterns that look like internal reasoning
-                        # Match patterns like "details about X: search..." or "X: search..."
-                        if re.search(r'^[^:]+:\s*(search|find|look|get)', content_to_yield.strip(), re.IGNORECASE):
-                            # Looks like internal reasoning format "topic: search..."
-                            logger.debug(f"Filtered out internal reasoning: {content_to_yield[:50]}...")
-                            continue
-                        
-                        # Filter out content that starts with reasoning-like patterns
-                        if re.match(r'^(details about|information about|let me|I will|I\'ll).*:\s*(search|find)', content_to_yield.strip(), re.IGNORECASE):
-                            logger.debug(f"Filtered out reasoning pattern: {content_to_yield[:50]}...")
-                            continue
-                        
-                        if not is_status_message:
-                            accumulated_content += content_to_yield
+                            accumulated_content += content
                             yield {
                                 'type': 'content',
-                                'content': content_to_yield,
+                                'content': content,
                                 'done': False
                             }
                     
-                    # Check if this is the final chunk (RunOutput)
-                    if hasattr(chunk, '__class__'):
-                        class_name = str(chunk.__class__)
-                        if 'RunOutput' in class_name and not hasattr(chunk, 'event'):
-                            # Final RunOutput object
-                            run_response = chunk
-                            break
+                    elif event_type == 'ToolCallStarted':
+                        # Tool is being called
+                        tool_name = getattr(event, 'tool_name', 'tool')
+                        
+                        # Generate appropriate status message
+                        if 'duckduckgo' in tool_name.lower() or 'search' in tool_name.lower():
+                            status_msg = "Searching the web for information..."
+                        elif 'knowledge' in tool_name.lower():
+                            status_msg = "Searching knowledge base..."
+                        else:
+                            status_msg = f"Using {tool_name}..."
+                        
+                        yield {
+                            'type': 'status',
+                            'status': 'tool_use',
+                            'message': status_msg
+                        }
+                    
+                    elif event_type == 'ToolCallCompleted':
+                        # Tool call finished
+                        tool_name = getattr(event, 'tool_name', 'tool')
+                        if tool_name not in tools_used:
+                            tools_used.append(tool_name)
+                    
+                    elif event_type == 'RunOutput':
+                        # Final output event
+                        run_response = event
+                        
+                        # Get final content if available
+                        final_content = getattr(event, 'content', None)
+                        if final_content and isinstance(final_content, str):
+                            # Only add if significantly different from accumulated
+                            if len(final_content) > len(accumulated_content):
+                                diff = final_content[len(accumulated_content):]
+                                if diff.strip():
+                                    accumulated_content = final_content
+                                    yield {
+                                        'type': 'content',
+                                        'content': diff,
+                                        'done': False
+                                    }
+                        
+                        break  # Final event, exit loop
                 
-                # If we didn't get a final response object, get it from the last chunk
-                if not run_response:
-                    # Try to get the full response
-                    try:
-                        # Run again without streaming to get full response for metadata
-                        run_response = await loop.run_in_executor(
-                            None,
-                            lambda: self.agent.run(
-                                enhanced_query,
-                                session_id=session_id,
-                                user_id=user_id
-                            )
-                        )
-                    except Exception as e:
-                        logger.warning(f"Could not get full response for metadata: {e}")
-                
-            else:
-                # Fallback: if stream=True doesn't return iterator, use word-by-word chunking
-                logger.debug("Stream result is not iterable, using fallback chunking...")
-                run_response = stream_result
-                content = run_response.content if hasattr(run_response, 'content') and run_response.content else str(stream_result)
-                
-                # Stream word by word for better UX
-                words = content.split()
-                accumulated_content = ""
-                
-                for word in words:
-                    accumulated_content += word + " "
-                    yield {
-                        'type': 'content',
-                        'content': word + " ",
-                        'done': False
-                    }
-                    await asyncio.sleep(0.02)
+                except Exception as e:
+                    logger.warning(f"Error processing event: {e}")
+                    continue
             
-            # Extract sources and tools from final response
+            # If we didn't get a RunOutput event, get the full response
+            if not run_response:
+                logger.debug("No RunOutput event received, fetching full response...")
+                try:
+                    run_response = await self.agent.arun(
+                        enhanced_query,
+                        session_id=session_id,
+                        user_id=user_id
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not get full response: {e}")
+            
+            # Extract sources and metadata from final response
+            sources = []
             if run_response:
                 sources = self._extract_sources(run_response)
                 
-                # Extract tools used
+                # Extract tools used from response if not already captured
                 if hasattr(run_response, 'tool_calls') and run_response.tool_calls:
-                    tools_used = [tool.name if hasattr(tool, 'name') else str(tool) for tool in run_response.tool_calls]
-                elif hasattr(run_response, 'tools') and run_response.tools:
-                    if isinstance(run_response.tools, list):
-                        tools_used = [str(t) for t in run_response.tools]
-                    else:
-                        tools_used = [str(run_response.tools)]
-            else:
-                sources = []
-                tools_used = []
+                    for tool_call in run_response.tool_calls:
+                        tool_name = getattr(tool_call, 'name', str(tool_call))
+                        if tool_name not in tools_used:
+                            tools_used.append(tool_name)
             
-            # Final chunk with metadata
+            # Send final done event with metadata
             yield {
                 'type': 'done',
                 'content': '',
@@ -850,7 +748,7 @@ class SelfImprovingResearchAgent:
                 'sources': sources,
                 'full_response': run_response
             }
-                
+        
         except Exception as e:
             logger.error(f"Error in streaming task: {str(e)}", exc_info=True)
             yield {
@@ -859,6 +757,7 @@ class SelfImprovingResearchAgent:
                 'done': True,
                 'error': str(e)
             }
+
     
     def provide_feedback(
         self,

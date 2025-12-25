@@ -31,14 +31,14 @@ const elements = {
     refreshBtn: document.getElementById('refreshBtn'),
     viewSkillsBtn: document.getElementById('viewSkillsBtn'),
     trainBtn: document.getElementById('trainBtn'),
-    
+
     // Stats
     totalTasks: document.getElementById('totalTasks'),
     successRate: document.getElementById('successRate'),
     avgReward: document.getElementById('avgReward'),
     skillCount: document.getElementById('skillCount'),
     topSkillsList: document.getElementById('topSkillsList'),
-    
+
     // Feedback
     taskSuccess: document.getElementById('taskSuccess'),
     taskSuccessValue: document.getElementById('taskSuccessValue'),
@@ -52,28 +52,28 @@ const elements = {
     skillForm: document.getElementById('skillForm'),
     submitFeedback: document.getElementById('submitFeedback'),
     feedbackStatus: document.getElementById('feedbackStatus'),
-    
+
     // Trajectory
     toolsUsed: document.getElementById('toolsUsed'),
     skillsApplied: document.getElementById('skillsApplied'),
     sessionId: document.getElementById('sessionId'),
     messageCountDisplay: document.getElementById('messageCount'),
-    
+
     // Modal
     skillsModal: document.getElementById('skillsModal'),
     closeModal: document.getElementById('closeModal'),
     allSkillsList: document.getElementById('allSkillsList'),
     skillSearch: document.getElementById('skillSearch'),
-    
+
     // Help panel
     helpBtn: document.getElementById('helpBtn'),
     helpPanel: document.getElementById('helpPanel'),
     closeHelpBtn: document.getElementById('closeHelpBtn'),
-    
+
     // Conversations
     newChatBtn: document.getElementById('newChatBtn'),
     conversationsList: document.getElementById('conversationsList'),
-    
+
     // Knowledge Base
     addKnowledgeBtn: document.getElementById('addKnowledgeBtn'),
     knowledgeUrl: document.getElementById('knowledgeUrl'),
@@ -86,11 +86,11 @@ const elements = {
 // Initialize application
 function init() {
     console.log('🚀 Initializing REFLEX UI...');
-    
+
     // Set theme
     document.body.setAttribute('data-theme', state.currentTheme);
     updateThemeIcon();
-    
+
     // Event listeners
     elements.sendBtn.addEventListener('click', sendMessage);
     elements.messageInput.addEventListener('keypress', (e) => {
@@ -99,61 +99,61 @@ function init() {
             sendMessage();
         }
     });
-    
+
     // Auto-resize textarea
     elements.messageInput.addEventListener('input', () => {
         elements.messageInput.style.height = 'auto';
         elements.messageInput.style.height = elements.messageInput.scrollHeight + 'px';
     });
-    
+
     // Theme toggle
     elements.themeToggle.addEventListener('click', toggleTheme);
-    
+
     // Refresh stats
     elements.refreshBtn.addEventListener('click', updateStats);
-    
+
     // View skills modal
     elements.viewSkillsBtn.addEventListener('click', () => {
         openSkillsModal();
     });
-    
+
     elements.closeModal.addEventListener('click', closeSkillsModal);
-    
+
     // Click outside modal to close
     elements.skillsModal.addEventListener('click', (e) => {
         if (e.target === elements.skillsModal) {
             closeSkillsModal();
         }
     });
-    
+
     // Train button
     elements.trainBtn.addEventListener('click', triggerTraining);
-    
+
     // Feedback sliders
     elements.taskSuccess.addEventListener('input', (e) => {
         elements.taskSuccessValue.textContent = e.target.value;
     });
-    
+
     elements.quality.addEventListener('input', (e) => {
         elements.qualityValue.textContent = e.target.value;
     });
-    
+
     elements.efficiency.addEventListener('input', (e) => {
         elements.efficiencyValue.textContent = e.target.value;
     });
-    
+
     elements.userFeedback.addEventListener('input', (e) => {
         elements.userFeedbackValue.textContent = e.target.value;
     });
-    
+
     // Create skill checkbox
     elements.createSkill.addEventListener('change', (e) => {
         elements.skillForm.style.display = e.target.checked ? 'flex' : 'none';
     });
-    
+
     // Submit feedback
     elements.submitFeedback.addEventListener('click', submitFeedback);
-    
+
     // Tabs
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -161,30 +161,30 @@ function init() {
             switchTab(tabName);
         });
     });
-    
+
     // Skill search
     elements.skillSearch.addEventListener('input', (e) => {
         filterSkills(e.target.value);
     });
-    
+
     // Update session info
     elements.sessionId.textContent = state.sessionId;
-    
+
     // Load initial stats
     updateStats();
-    
+
     // Load conversations and chat history
     loadConversations();
     loadChatHistory();
-    
+
     // Load knowledge base
     loadKnowledgeBase();
-    
+
     // New chat button
     if (elements.newChatBtn) {
         elements.newChatBtn.addEventListener('click', createNewConversation);
     }
-    
+
     // Knowledge base handlers
     if (elements.addKnowledgeBtn) {
         elements.addKnowledgeBtn.addEventListener('click', addKnowledgeSource);
@@ -195,10 +195,10 @@ function init() {
     if (elements.clearKnowledgeBtn) {
         elements.clearKnowledgeBtn.addEventListener('click', clearKnowledgeBase);
     }
-    
+
     // Load knowledge base on init
     loadKnowledgeBase();
-    
+
     // Help panel toggle
     if (elements.helpBtn) {
         elements.helpBtn.addEventListener('click', () => {
@@ -210,7 +210,7 @@ function init() {
             elements.helpPanel.classList.remove('active');
         });
     }
-    
+
     console.log('✅ Application initialized');
 }
 
@@ -228,13 +228,13 @@ async function loadConversations() {
             }, true);
             return;
         }
-        
+
         const data = await response.json();
         state.conversations = data.sessions || [];
-        
+
         // Render conversations
         elements.conversationsList.innerHTML = '';
-        
+
         if (state.conversations.length === 0) {
             // Create default conversation if none exist
             renderConversationItem({
@@ -244,13 +244,13 @@ async function loadConversations() {
             }, true);
         } else {
             // Sort by last activity (most recent first)
-            state.conversations.sort((a, b) => 
+            state.conversations.sort((a, b) =>
                 new Date(b.last_activity) - new Date(a.last_activity)
             );
-            
+
             // Check if current session exists in list
             const currentSessionExists = state.conversations.some(c => c.session_id === state.sessionId);
-            
+
             // If current session not in list, add it
             if (!currentSessionExists) {
                 state.conversations.unshift({
@@ -259,7 +259,7 @@ async function loadConversations() {
                     message_count: 0
                 });
             }
-            
+
             state.conversations.forEach((conv) => {
                 const isActive = conv.session_id === state.sessionId;
                 renderConversationItem(conv, isActive);
@@ -282,12 +282,12 @@ function renderConversationItem(conversation, isActive = false, appendToList = t
     const item = document.createElement('div');
     item.className = `conversation-item ${isActive ? 'active' : ''}`;
     item.dataset.sessionId = conversation.session_id;
-    
+
     // Get first message as title (or use default)
     const title = conversation.title || `Chat ${conversation.session_id.slice(-6)}`;
     const date = new Date(conversation.last_activity);
     const timeAgo = getTimeAgo(date);
-    
+
     item.innerHTML = `
         <div class="conversation-content">
             <div class="conversation-title">${escapeHtml(title)}</div>
@@ -303,15 +303,15 @@ function renderConversationItem(conversation, isActive = false, appendToList = t
             </button>
         </div>
     `;
-    
+
     item.addEventListener('click', () => {
         switchConversation(conversation.session_id);
     });
-    
+
     if (appendToList && elements.conversationsList) {
         elements.conversationsList.appendChild(item);
     }
-    
+
     return item;
 }
 
@@ -322,7 +322,7 @@ function getTimeAgo(date) {
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
-    
+
     if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
@@ -340,27 +340,27 @@ function escapeHtml(text) {
 // Switch to a different conversation
 async function switchConversation(sessionId) {
     if (sessionId === state.sessionId) return;
-    
+
     // Update state
     state.sessionId = sessionId;
     localStorage.setItem('currentSessionId', sessionId);
-    
+
     // Update active conversation in UI
     document.querySelectorAll('.conversation-item').forEach(item => {
         item.classList.toggle('active', item.dataset.sessionId === sessionId);
     });
-    
+
     // Clear current chat
     elements.chatMessages.innerHTML = '';
-    
+
     // Load new conversation history
     await loadChatHistory();
-    
+
     // Update session info
     if (elements.sessionId) {
         elements.sessionId.textContent = sessionId;
     }
-    
+
     // Reset message count
     state.messageCount = 0;
     if (elements.messageCountDisplay) {
@@ -372,21 +372,21 @@ async function switchConversation(sessionId) {
 function createNewConversation() {
     const newSessionId = `session_${Date.now()}`;
     switchConversation(newSessionId);
-    
+
     // Add to conversations list
     const newConv = {
         session_id: newSessionId,
         last_activity: new Date().toISOString(),
         message_count: 0
     };
-    
+
     state.conversations.unshift(newConv);
-    
+
     // Remove active class from all items
     document.querySelectorAll('.conversation-item').forEach(item => {
         item.classList.remove('active');
     });
-    
+
     // Add new conversation at the top (don't append automatically)
     const newItem = renderConversationItem(newConv, true, false);
     if (elements.conversationsList && newItem) {
@@ -406,16 +406,16 @@ function createConversationElement(conversation, isActive = false) {
 // Delete conversation
 async function deleteConversation(sessionId) {
     if (!confirm('Are you sure you want to delete this conversation?')) return;
-    
+
     // Remove from UI
     const item = document.querySelector(`[data-session-id="${sessionId}"]`);
     if (item) item.remove();
-    
+
     // If it's the current session, create a new one
     if (sessionId === state.sessionId) {
         createNewConversation();
     }
-    
+
     // Remove from state
     state.conversations = state.conversations.filter(c => c.session_id !== sessionId);
 }
@@ -428,7 +428,7 @@ async function loadChatHistory() {
     try {
         // Clear current messages first
         const welcomeMsg = elements.chatMessages.querySelector('.welcome-message');
-        
+
         const response = await fetch(`${API_BASE}/chat/history?session_id=${state.sessionId}`);
         if (!response.ok) {
             // If no history, show welcome message
@@ -437,15 +437,15 @@ async function loadChatHistory() {
             }
             return;
         }
-        
+
         const data = await response.json();
         if (data.messages && data.messages.length > 0) {
             // Remove welcome message if history exists
             if (welcomeMsg) welcomeMsg.remove();
-            
+
             // Clear any existing messages
             elements.chatMessages.innerHTML = '';
-            
+
             // Load messages
             data.messages.forEach(msg => {
                 addMessage(msg.role, msg.content, {
@@ -453,17 +453,17 @@ async function loadChatHistory() {
                     skills: msg.skills_applied || []
                 }, false); // Don't scroll for each historical message
             });
-            
+
             // Scroll to bottom after loading all
             setTimeout(() => {
                 elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
             }, 100);
-            
+
             state.messageCount = data.messages.length;
             if (elements.messageCountDisplay) {
                 elements.messageCountDisplay.textContent = state.messageCount;
             }
-            
+
             // Update conversation title with first message
             updateConversationTitle(data.messages[0]?.content || 'New Chat');
         } else {
@@ -506,7 +506,7 @@ function updateConversationTitle(firstMessage) {
         const titleEl = item.querySelector('.conversation-title');
         if (titleEl) {
             // Use first 30 chars of first message as title
-            const title = firstMessage.length > 30 
+            const title = firstMessage.length > 30
                 ? firstMessage.substring(0, 30) + '...'
                 : firstMessage;
             titleEl.textContent = escapeHtml(title);
@@ -533,27 +533,27 @@ function updateConversationInSidebar() {
 async function sendMessage() {
     const message = elements.messageInput.value.trim();
     if (!message) return;
-    
+
     // Disable input
     elements.sendBtn.disabled = true;
     elements.messageInput.disabled = true;
-    
+
     // Add user message
     addMessage('user', message);
-    
+
     // Clear input
     elements.messageInput.value = '';
     elements.messageInput.style.height = 'auto';
-    
+
     // Show loading with activity updates
     const loadingId = addLoadingMessage('Analyzing your question...');
-    
+
     // Create agent message container for streaming
     let agentMessageId = null;
     let accumulatedContent = '';
     let toolsUsed = [];
     let relevantSkills = [];
-    
+
     try {
         const response = await fetch(`${API_BASE}/chat/stream`, {
             method: 'POST',
@@ -564,49 +564,56 @@ async function sendMessage() {
                 user_id: state.userId
             })
         });
-        
+
         if (!response.ok) throw new Error('Failed to get response');
-        
+
         // Handle streaming response
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            
+
             const chunk = decoder.decode(value, { stream: true });
             const lines = chunk.split('\n');
-            
+
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     try {
                         const data = JSON.parse(line.slice(6));
-                        
+
                         if (data.type === 'status') {
-                            // Update loading status
-                            updateLoadingStatus(loadingId, data.message);
+                            // If agent message doesn't exist yet, create it
+                            if (!agentMessageId) {
+                                removeLoadingMessage(loadingId);
+                                agentMessageId = addStreamingMessage('agent', '');
+                            }
+                            addThinkingStep(agentMessageId, data.message);
                         } else if (data.type === 'content') {
                             // Remove loading message on first content
                             if (!agentMessageId) {
                                 removeLoadingMessage(loadingId);
                                 agentMessageId = addStreamingMessage('agent', '');
                             }
-                            
+
                             // Accumulate content
                             accumulatedContent += data.content;
-                            
+
                             // Update streaming message
                             updateStreamingMessage(agentMessageId, accumulatedContent);
                         } else if (data.type === 'done') {
+                            if (agentMessageId) {
+                                finalizeThinkingProcess(agentMessageId);
+                            }
                             // Finalize message
                             toolsUsed = data.tools_used || [];
                             relevantSkills = data.relevant_skills || [];
                             const sources = data.sources || [];
-                            
+
                             // Use accumulated content from done event if available, otherwise use our accumulated
                             const finalContent = data.accumulated || accumulatedContent;
-                            
+
                             // Replace streaming message with final message
                             if (agentMessageId) {
                                 replaceStreamingMessage(agentMessageId, finalContent, {
@@ -623,7 +630,7 @@ async function sendMessage() {
                                     sources: sources
                                 });
                             }
-                            
+
                             // Update trajectory
                             state.lastTrajectory = {
                                 message: accumulatedContent,
@@ -632,19 +639,19 @@ async function sendMessage() {
                                 sources: sources
                             };
                             updateTrajectoryInfo(state.lastTrajectory);
-                            
+
                             // Update message count
                             state.messageCount++;
                             elements.messageCountDisplay.textContent = state.messageCount;
-                            
+
                             // Update conversation title if this is the first message
                             if (state.messageCount === 1) {
                                 updateConversationTitle(message);
                             }
-                            
+
                             // Update conversation in sidebar
                             updateConversationInSidebar();
-                            
+
                             // Update stats
                             updateStats();
                         } else if (data.type === 'error') {
@@ -662,7 +669,7 @@ async function sendMessage() {
                 }
             }
         }
-        
+
     } catch (error) {
         console.error('Error:', error);
         removeLoadingMessage(loadingId);
@@ -682,36 +689,36 @@ async function sendMessage() {
 function addMessage(type, content, meta = {}, shouldScroll = true) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${type}`;
-    
+
     // Add fade-in animation
     messageDiv.style.opacity = '0';
     messageDiv.style.transform = 'translateY(10px)';
-    
+
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
     avatar.innerHTML = type === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
-    
+
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    
+
     const textDiv = document.createElement('div');
     textDiv.className = 'message-text';
     textDiv.innerHTML = formatMessage(content);
-    
+
     contentDiv.appendChild(textDiv);
-    
+
     if (meta.tools || meta.skills || meta.sources) {
         const metaDiv = document.createElement('div');
         metaDiv.className = 'message-meta';
-        
+
         if (meta.tools && meta.tools.length > 0) {
             metaDiv.innerHTML += `<span><i class="fas fa-tools"></i> ${meta.tools.join(', ')}</span>`;
         }
-        
+
         if (meta.skills && meta.skills.length > 0) {
             metaDiv.innerHTML += `<span><i class="fas fa-lightbulb"></i> ${meta.skills.join(', ')}</span>`;
         }
-        
+
         if (meta.sources && meta.sources.length > 0) {
             const sourcesHtml = meta.sources.map(source => {
                 const icon = source.type === 'rag' ? 'fa-database' : 'fa-globe';
@@ -724,22 +731,22 @@ function addMessage(type, content, meta = {}, shouldScroll = true) {
             }).join('');
             metaDiv.innerHTML += `<div class="message-sources"><i class="fas fa-link"></i> Sources: ${sourcesHtml}</div>`;
         }
-        
+
         contentDiv.appendChild(metaDiv);
     }
-    
+
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(contentDiv);
-    
+
     elements.chatMessages.appendChild(messageDiv);
-    
+
     // Animate in
     requestAnimationFrame(() => {
         messageDiv.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
         messageDiv.style.opacity = '1';
         messageDiv.style.transform = 'translateY(0)';
     });
-    
+
     if (shouldScroll) {
         elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
     }
@@ -748,10 +755,10 @@ function addMessage(type, content, meta = {}, shouldScroll = true) {
 // Format message with proper markdown rendering
 function formatMessage(content) {
     if (!content) return '';
-    
+
     // Ensure content is a string
     const text = String(content);
-    
+
     if (typeof marked !== 'undefined') {
         try {
             // Use marked.js for proper markdown rendering
@@ -762,7 +769,7 @@ function formatMessage(content) {
                 headerIds: false,
                 mangle: false
             };
-            
+
             // Parse markdown
             const html = marked.parse(text, markedOptions);
             return html;
@@ -791,11 +798,11 @@ function addLoadingMessage(statusText = 'Thinking...') {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'message agent loading';
     messageDiv.id = id;
-    
+
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
     avatar.innerHTML = '<i class="fas fa-robot"></i>';
-    
+
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
     contentDiv.innerHTML = `
@@ -808,13 +815,13 @@ function addLoadingMessage(statusText = 'Thinking...') {
             </div>
         </div>
     `;
-    
+
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(contentDiv);
-    
+
     elements.chatMessages.appendChild(messageDiv);
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
-    
+
     return id;
 }
 
@@ -844,38 +851,38 @@ function addStreamingMessage(type, initialContent) {
     messageDiv.className = `message ${type} streaming`;
     const id = `streaming_${Date.now()}`;
     messageDiv.id = id;
-    
+
     // Add fade-in animation
     messageDiv.style.opacity = '0';
     messageDiv.style.transform = 'translateY(10px)';
-    
+
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
     avatar.innerHTML = type === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
-    
+
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    
+
     const textDiv = document.createElement('div');
     textDiv.className = 'message-text streaming-text';
     // Don't use formatMessage here - use plain text for streaming
     textDiv.textContent = initialContent || '';
-    
+
     contentDiv.appendChild(textDiv);
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(contentDiv);
-    
+
     elements.chatMessages.appendChild(messageDiv);
-    
+
     // Animate in
     requestAnimationFrame(() => {
         messageDiv.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
         messageDiv.style.opacity = '1';
         messageDiv.style.transform = 'translateY(0)';
     });
-    
+
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
-    
+
     return id;
 }
 
@@ -893,9 +900,9 @@ function updateStreamingMessage(id, content) {
                 .replace(/\n/g, '<br>')
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\*(.*?)\*/g, '<em>$1</em>');
-            
+
             textDiv.innerHTML = basicFormatted;
-            
+
             // Auto-scroll to bottom
             elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
         }
@@ -906,35 +913,35 @@ function updateStreamingMessage(id, content) {
 function replaceStreamingMessage(id, content, meta = {}) {
     const messageDiv = document.getElementById(id);
     if (!messageDiv) return;
-    
+
     // Remove streaming class
     messageDiv.classList.remove('streaming');
-    
+
     // Update content
     const textDiv = messageDiv.querySelector('.streaming-text');
     if (textDiv) {
         textDiv.classList.remove('streaming-text');
         textDiv.innerHTML = formatMessage(content);
     }
-    
+
     // Add metadata if provided
     const contentDiv = messageDiv.querySelector('.message-content');
     if (contentDiv && (meta.tools || meta.skills || meta.sources)) {
         // Remove existing meta if any
         const existingMeta = contentDiv.querySelector('.message-meta');
         if (existingMeta) existingMeta.remove();
-        
+
         const metaDiv = document.createElement('div');
         metaDiv.className = 'message-meta';
-        
+
         if (meta.tools && meta.tools.length > 0) {
             metaDiv.innerHTML += `<span><i class="fas fa-tools"></i> ${meta.tools.join(', ')}</span>`;
         }
-        
+
         if (meta.skills && meta.skills.length > 0) {
             metaDiv.innerHTML += `<span><i class="fas fa-lightbulb"></i> ${meta.skills.join(', ')}</span>`;
         }
-        
+
         if (meta.sources && meta.sources.length > 0) {
             const sourcesHtml = meta.sources.map(source => {
                 const icon = source.type === 'rag' ? 'fa-database' : 'fa-globe';
@@ -947,10 +954,10 @@ function replaceStreamingMessage(id, content, meta = {}) {
             }).join('');
             metaDiv.innerHTML += `<div class="message-sources"><i class="fas fa-link"></i> Sources: ${sourcesHtml}</div>`;
         }
-        
+
         contentDiv.appendChild(metaDiv);
     }
-    
+
     // Scroll to bottom
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
 }
@@ -960,18 +967,18 @@ async function updateStats() {
     try {
         const response = await fetch(`${API_BASE}/stats`);
         if (!response.ok) throw new Error('Failed to fetch stats');
-        
+
         const stats = await response.json();
-        
+
         elements.totalTasks.textContent = stats.total_tasks;
         elements.skillCount.textContent = stats.skill_count;
         elements.avgReward.textContent = stats.average_reward.toFixed(2);
-        
-        const successRate = stats.total_tasks > 0 
+
+        const successRate = stats.total_tasks > 0
             ? ((stats.successful_tasks / stats.total_tasks) * 100).toFixed(1)
             : 0;
         elements.successRate.textContent = `${successRate}%`;
-        
+
         // Update top skills
         if (stats.top_skills && stats.top_skills.length > 0) {
             elements.topSkillsList.innerHTML = stats.top_skills.map(skill => `
@@ -986,7 +993,7 @@ async function updateStats() {
         } else {
             elements.topSkillsList.innerHTML = '<p class="empty-state">No skills learned yet</p>';
         }
-        
+
     } catch (error) {
         console.error('Error updating stats:', error);
     }
@@ -1002,7 +1009,7 @@ function updateTrajectoryInfo(data) {
     } else {
         elements.toolsUsed.innerHTML = '<p class="empty-state">No tools used</p>';
     }
-    
+
     // Skills applied
     if (data.relevant_skills && data.relevant_skills.length > 0) {
         elements.skillsApplied.innerHTML = data.relevant_skills.map(skill => `
@@ -1019,7 +1026,7 @@ async function submitFeedback() {
         showFeedbackStatus('Please send a message first', 'error');
         return;
     }
-    
+
     const feedbackData = {
         session_id: state.sessionId,
         task_success: parseFloat(elements.taskSuccess.value),
@@ -1027,18 +1034,18 @@ async function submitFeedback() {
         efficiency_score: parseFloat(elements.efficiency.value),
         user_feedback: parseFloat(elements.userFeedback.value)
     };
-    
+
     // Add skill if checkbox is checked
     if (elements.createSkill.checked) {
         const skillName = document.getElementById('skillName').value.trim();
         const skillDesc = document.getElementById('skillDescription').value.trim();
         const skillContext = document.getElementById('skillContext').value.trim();
-        
+
         if (!skillName || !skillDesc || !skillContext) {
             showFeedbackStatus('Please fill in all skill fields', 'error');
             return;
         }
-        
+
         feedbackData.learned_skill = {
             name: skillName,
             description: skillDesc,
@@ -1046,23 +1053,23 @@ async function submitFeedback() {
             success_rate: feedbackData.task_success
         };
     }
-    
+
     try {
         const response = await fetch(`${API_BASE}/feedback`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(feedbackData)
         });
-        
+
         if (!response.ok) throw new Error('Failed to submit feedback');
-        
+
         const result = await response.json();
-        
+
         showFeedbackStatus(
             `Feedback submitted! Reward: ${result.total_reward.toFixed(2)}`,
             'success'
         );
-        
+
         // Reset form
         elements.taskSuccess.value = 0.5;
         elements.quality.value = 0.5;
@@ -1070,16 +1077,16 @@ async function submitFeedback() {
         elements.userFeedback.value = 0;
         elements.createSkill.checked = false;
         elements.skillForm.style.display = 'none';
-        
+
         // Update values
         elements.taskSuccessValue.textContent = '0.5';
         elements.qualityValue.textContent = '0.5';
         elements.efficiencyValue.textContent = '0.5';
         elements.userFeedbackValue.textContent = '0.0';
-        
+
         // Update stats
         updateStats();
-        
+
     } catch (error) {
         console.error('Error submitting feedback:', error);
         showFeedbackStatus('Failed to submit feedback', 'error');
@@ -1090,7 +1097,7 @@ async function submitFeedback() {
 function showFeedbackStatus(message, type) {
     elements.feedbackStatus.textContent = message;
     elements.feedbackStatus.className = `status-message ${type}`;
-    
+
     setTimeout(() => {
         elements.feedbackStatus.className = 'status-message';
     }, 3000);
@@ -1100,24 +1107,24 @@ function showFeedbackStatus(message, type) {
 async function triggerTraining() {
     elements.trainBtn.disabled = true;
     elements.trainBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Training...';
-    
+
     try {
         const response = await fetch(`${API_BASE}/train`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ batch_size: 32 })
         });
-        
+
         if (!response.ok) throw new Error('Training failed');
-        
+
         const result = await response.json();
-        
+
         // Update stats
         updateStats();
-        
+
         // Show success
         alert('Training iteration completed successfully!');
-        
+
     } catch (error) {
         console.error('Training error:', error);
         alert('Training failed: ' + error.message);
@@ -1131,20 +1138,20 @@ async function triggerTraining() {
 async function openSkillsModal() {
     elements.skillsModal.classList.add('active');
     elements.allSkillsList.innerHTML = '<p class="loading">Loading skills...</p>';
-    
+
     try {
         const response = await fetch(`${API_BASE}/skills?limit=100`);
         if (!response.ok) throw new Error('Failed to fetch skills');
-        
+
         const data = await response.json();
-        
+
         if (data.skills.length === 0) {
             elements.allSkillsList.innerHTML = '<p class="empty-state">No skills learned yet</p>';
             return;
         }
-        
+
         renderSkills(data.skills);
-        
+
     } catch (error) {
         console.error('Error loading skills:', error);
         elements.allSkillsList.innerHTML = '<p class="empty-state">Error loading skills</p>';
@@ -1178,7 +1185,7 @@ function renderSkills(skills) {
 function filterSkills(query) {
     const cards = elements.allSkillsList.querySelectorAll('.skill-card');
     const lowerQuery = query.toLowerCase();
-    
+
     cards.forEach(card => {
         const text = card.textContent.toLowerCase();
         card.style.display = text.includes(lowerQuery) ? 'block' : 'none';
@@ -1196,7 +1203,7 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
-    
+
     document.querySelectorAll('.tab-pane').forEach(pane => {
         pane.classList.toggle('active', pane.id === `${tabName}Tab`);
     });
@@ -1229,7 +1236,7 @@ async function loadKnowledgeBase() {
             }
             return;
         }
-        
+
         const data = await response.json();
         if (elements.knowledgeStatus) {
             updateKnowledgeStatus(data.enabled, data.enabled ? 'Active' : 'Disabled');
@@ -1250,7 +1257,7 @@ async function loadKnowledgeBase() {
 
 function updateKnowledgeStatus(enabled, message) {
     if (!elements.knowledgeStatus) return;
-    
+
     const indicator = elements.knowledgeStatus.querySelector('.status-indicator');
     if (indicator) {
         indicator.innerHTML = `
@@ -1262,12 +1269,12 @@ function updateKnowledgeStatus(enabled, message) {
 
 function renderKnowledgeSources(urls) {
     if (!elements.knowledgeSourcesList) return;
-    
+
     if (urls.length === 0) {
         elements.knowledgeSourcesList.innerHTML = '<p class="empty-state">No knowledge sources added yet</p>';
         return;
     }
-    
+
     elements.knowledgeSourcesList.innerHTML = urls.map((url) => `
         <div class="source-item">
             <div class="source-content">
@@ -1287,17 +1294,17 @@ async function addKnowledgeSource() {
         showNotification('Please enter a valid URL', 'error');
         return;
     }
-    
+
     try {
         elements.addKnowledgeBtn.disabled = true;
         elements.addKnowledgeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
-        
+
         const response = await fetch(`${API_BASE}/knowledge/urls`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url })
         });
-        
+
         if (!response.ok) {
             let errorMessage = 'Failed to add URL';
             try {
@@ -1308,12 +1315,12 @@ async function addKnowledgeSource() {
             }
             throw new Error(errorMessage);
         }
-        
+
         const result = await response.json();
         elements.knowledgeUrl.value = '';
         await loadKnowledgeBase();
         showNotification(result.message || 'Knowledge source added successfully!', 'success');
-        
+
     } catch (error) {
         console.error('Error adding knowledge source:', error);
         showNotification(error.message || 'Failed to add knowledge source', 'error');
@@ -1325,14 +1332,14 @@ async function addKnowledgeSource() {
 
 async function removeKnowledgeSource(url) {
     if (!confirm(`Are you sure you want to remove this knowledge source?\n${url}`)) return;
-    
+
     try {
         const response = await fetch(`${API_BASE}/knowledge/urls`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url })
         });
-        
+
         if (!response.ok) {
             let errorMessage = 'Failed to remove URL';
             try {
@@ -1343,11 +1350,11 @@ async function removeKnowledgeSource(url) {
             }
             throw new Error(errorMessage);
         }
-        
+
         const result = await response.json();
         await loadKnowledgeBase();
         showNotification(result.message || 'Knowledge source removed', 'success');
-        
+
     } catch (error) {
         console.error('Error removing knowledge source:', error);
         showNotification(error.message || 'Failed to remove knowledge source', 'error');
@@ -1356,15 +1363,15 @@ async function removeKnowledgeSource(url) {
 
 async function reloadKnowledgeBase() {
     if (!confirm('This will reload all knowledge sources. This may take a while. Continue?')) return;
-    
+
     try {
         elements.reloadKnowledgeBtn.disabled = true;
         elements.reloadKnowledgeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reloading...';
-        
+
         const response = await fetch(`${API_BASE}/knowledge/reload`, {
             method: 'POST'
         });
-        
+
         if (!response.ok) {
             // Try to get error message from response
             let errorMessage = 'Failed to reload knowledge base';
@@ -1377,11 +1384,11 @@ async function reloadKnowledgeBase() {
             }
             throw new Error(errorMessage);
         }
-        
+
         const result = await response.json();
         showNotification(result.message || 'Knowledge base reloaded successfully!', 'success');
         await loadKnowledgeBase();
-        
+
     } catch (error) {
         console.error('Error reloading knowledge base:', error);
         showNotification(error.message || 'Failed to reload knowledge base', 'error');
@@ -1393,15 +1400,15 @@ async function reloadKnowledgeBase() {
 
 async function clearKnowledgeBase() {
     if (!confirm('Are you sure you want to clear all knowledge sources? This cannot be undone.')) return;
-    
+
     try {
         elements.clearKnowledgeBtn.disabled = true;
         elements.clearKnowledgeBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Clearing...';
-        
+
         const response = await fetch(`${API_BASE}/knowledge/clear`, {
             method: 'POST'
         });
-        
+
         if (!response.ok) {
             let errorMessage = 'Failed to clear knowledge base';
             try {
@@ -1412,11 +1419,11 @@ async function clearKnowledgeBase() {
             }
             throw new Error(errorMessage);
         }
-        
+
         const result = await response.json();
         showNotification(result.message || 'Knowledge base cleared', 'success');
         await loadKnowledgeBase();
-        
+
     } catch (error) {
         console.error('Error clearing knowledge base:', error);
         showNotification(error.message || 'Failed to clear knowledge base', 'error');
@@ -1446,9 +1453,9 @@ function showNotification(message, type = 'info') {
         z-index: 10000;
         animation: slideIn 0.3s ease;
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         notification.style.animation = 'slideOut 0.3s ease';
         setTimeout(() => notification.remove(), 300);
@@ -1460,5 +1467,90 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
+}
+
+// Add a step to the thinking process
+function addThinkingStep(messageId, stepText) {
+    const messageDiv = document.getElementById(messageId);
+    if (!messageDiv) return;
+
+    const contentDiv = messageDiv.querySelector('.message-content');
+    if (!contentDiv) return;
+
+    // Check if thinking process exists
+    let thinkingProcess = contentDiv.querySelector('.thinking-process');
+
+    if (!thinkingProcess) {
+        thinkingProcess = document.createElement('div');
+        thinkingProcess.className = 'thinking-process open'; // Default open
+
+        thinkingProcess.innerHTML = `
+            <div class="thinking-header" onclick="this.parentElement.classList.toggle('open')">
+                <span><i class="fas fa-brain"></i> Thinking Process</span>
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            <div class="thinking-content"></div>
+        `;
+
+        // Insert before text content
+        const textDiv = contentDiv.querySelector('.message-text');
+        if (textDiv) {
+            contentDiv.insertBefore(thinkingProcess, textDiv);
+        } else {
+            contentDiv.appendChild(thinkingProcess);
+        }
+    }
+
+    // Add step
+    const thinkingContent = thinkingProcess.querySelector('.thinking-content');
+    const stepDiv = document.createElement('div');
+    stepDiv.className = 'thinking-step active';
+    stepDiv.innerHTML = `
+        <i class="fas fa-spinner"></i>
+        <span>${escapeHtml(stepText)}</span>
+    `;
+
+    // Mark previous steps as done (inactive)
+    const prevSteps = thinkingContent.querySelectorAll('.thinking-step');
+    prevSteps.forEach(step => {
+        step.classList.remove('active');
+        const icon = step.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-check';
+            icon.style.color = 'var(--success)';
+        }
+    });
+
+    thinkingContent.appendChild(stepDiv);
+
+    // Scroll to bottom of thinking content
+    thinkingContent.scrollTop = thinkingContent.scrollHeight;
+
+    // Update header count
+    const headerTitle = thinkingProcess.querySelector('.thinking-header span');
+    headerTitle.innerHTML = `<i class="fas fa-brain"></i> Thinking Process (${prevSteps.length + 1})`;
+
+    // Scroll chat to keep bottom visible
+    elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+}
+
+// Finalize thinking process
+function finalizeThinkingProcess(messageId) {
+    const messageDiv = document.getElementById(messageId);
+    if (!messageDiv) return;
+
+    const thinkingProcess = messageDiv.querySelector('.thinking-process');
+    if (!thinkingProcess) return;
+
+    // Mark all steps as done
+    const steps = thinkingProcess.querySelectorAll('.thinking-step');
+    steps.forEach(step => {
+        step.classList.remove('active');
+        const icon = step.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-check';
+            icon.style.color = 'var(--success)';
+        }
+    });
 }
 
