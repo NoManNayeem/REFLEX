@@ -261,6 +261,7 @@ async def chat(request: Request, chat_request: ChatRequest):
             trajectory_id=session_id,
             tools_used=tools_used,
             relevant_skills=relevant_skills,
+            sources=result.get('sources', []),
             critic_score=result.get('critic_score', 0.0),
             timestamp=datetime.now().isoformat()
         )

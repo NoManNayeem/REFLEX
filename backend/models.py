@@ -21,6 +21,7 @@ class ChatResponse(BaseModel):
     trajectory_id: str = Field(..., description="Trajectory ID for feedback")
     tools_used: List[str] = Field(default_factory=list, description="Tools used in response")
     relevant_skills: List[str] = Field(default_factory=list, description="Skills applied")
+    sources: List[Dict[str, str]] = Field(default_factory=list, description="Sources used (RAG, web search, etc.)")
     critic_score: float = Field(0.0, description="Internal critic score")
     timestamp: str = Field(..., description="Response timestamp")
 
