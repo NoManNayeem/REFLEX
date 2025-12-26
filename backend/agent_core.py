@@ -1320,26 +1320,63 @@ class SelfImprovingResearchAgent:
         logger.info(f"Training iteration completed. Batch size: {batch_size}, skills updated: {updated_skills}")
     
     def _extract_sources(self, run_response) -> List[Dict[str, str]]:
-        """Extract sources from agent response"""
+        """Extract sources from agent response - only includes sources that were actually used"""
         sources = []
+        rag_was_used = False  # Track if RAG was actually used
         
         try:
-            # Extract from knowledge base if used
+            # Extract from knowledge base if used (Agno's knowledge_sources attribute)
             if hasattr(run_response, 'knowledge_sources') and run_response.knowledge_sources:
+                rag_was_used = True
                 for kb_source in run_response.knowledge_sources:
-                    sources.append({
-                        'type': 'rag',
-                        'identifier': 'RAG',
-                        'url': getattr(kb_source, 'url', ''),
-                        'title': getattr(kb_source, 'title', ''),
-                        'source': 'Knowledge Base'
-                    })
+                    url = getattr(kb_source, 'url', '') or getattr(kb_source, 'source', '')
+                    title = getattr(kb_source, 'title', '') or getattr(kb_source, 'name', '') or url
+                    if url:
+                        sources.append({
+                            'type': 'rag',
+                            'identifier': 'RAG',
+                            'url': url,
+                            'title': title,
+                            'source': 'Knowledge Base'
+                        })
             
-            # Extract from tool calls (web search URLs)
+            # Extract from tool calls (web search URLs and knowledge base searches)
             if hasattr(run_response, 'tool_calls') and run_response.tool_calls:
                 for tool_call in run_response.tool_calls:
                     tool_name = getattr(tool_call, 'name', str(tool_call)).lower()
-                    if 'duckduckgo' in tool_name or 'search' in tool_name:
+                    
+                    # Check for knowledge base search tool calls
+                    if 'knowledge' in tool_name or 'search_knowledge' in tool_name or 'rag' in tool_name:
+                        rag_was_used = True
+                        # Extract knowledge base URLs from tool call results
+                        if hasattr(tool_call, 'result') and tool_call.result:
+                            if isinstance(tool_call.result, list):
+                                for result in tool_call.result:
+                                    if isinstance(result, dict):
+                                        url = result.get('url') or result.get('source') or result.get('link')
+                                        title = result.get('title') or result.get('name') or url
+                                        if url:
+                                            sources.append({
+                                                'type': 'rag',
+                                                'identifier': 'RAG',
+                                                'url': url,
+                                                'title': title or url,
+                                                'source': 'Knowledge Base'
+                                            })
+                            elif isinstance(tool_call.result, dict):
+                                url = tool_call.result.get('url') or tool_call.result.get('source') or tool_call.result.get('link')
+                                title = tool_call.result.get('title') or tool_call.result.get('name')
+                                if url:
+                                    sources.append({
+                                        'type': 'rag',
+                                        'identifier': 'RAG',
+                                        'url': url,
+                                        'title': title or url,
+                                        'source': 'Knowledge Base'
+                                    })
+                    
+                    # Extract web search URLs
+                    elif 'duckduckgo' in tool_name or 'search' in tool_name:
                         # Extract URLs from web search results
                         if hasattr(tool_call, 'result') and tool_call.result:
                             if isinstance(tool_call.result, list):
@@ -1367,30 +1404,29 @@ class SelfImprovingResearchAgent:
                                         'source': 'DuckDuckGo Search'
                                     })
             
-            # Extract URLs from knowledge base URLs if RAG was used
-            if self.knowledge and self.knowledge_urls:
-                # Check if knowledge was actually used in the response
-                # This is a heuristic - in a real implementation, Agno would track this
-                for kb_url in self.knowledge_urls:
-                    if kb_url not in [s.get('url', '') for s in sources]:
-                        sources.append({
-                            'type': 'rag',
-                            'identifier': 'RAG',
-                            'url': kb_url,
-                            'title': kb_url,
-                            'source': 'Knowledge Base'
-                        })
+            # Check response content for evidence of knowledge base usage
+            # Only if we haven't already detected RAG usage
+            if not rag_was_used and hasattr(run_response, 'content') and run_response.content:
+                content = str(run_response.content).lower()
+                # Look for indicators that knowledge was used (citations, references, etc.)
+                # This is a fallback check - if knowledge_sources or tool_calls didn't capture it
+                if self.knowledge and any(
+                    keyword in content 
+                    for keyword in ['according to', 'based on', 'source:', 'reference:', 'from the knowledge']
+                ):
+                    # Still don't add all URLs - only if we can't determine which ones
+                    logger.debug("Detected possible RAG usage from content, but no specific sources found")
             
             # Remove duplicates
             seen = set()
             unique_sources = []
             for source in sources:
                 key = source['url']
-                if key not in seen:
+                if key and key not in seen:
                     seen.add(key)
                     unique_sources.append(source)
             
-            logger.debug(f"Extracted {len(unique_sources)} sources from response")
+            logger.debug(f"Extracted {len(unique_sources)} sources from response (RAG used: {rag_was_used})")
             return unique_sources
             
         except Exception as e:
