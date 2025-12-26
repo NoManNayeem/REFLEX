@@ -41,7 +41,8 @@ from models import (
     SkillCreate,
     TrainingRequest,
     SessionInfo,
-    AgentStats
+    AgentStats,
+    MessageUpdate
 )
 
 # Import knowledge base modules for status check
@@ -686,6 +687,110 @@ async def list_sessions(
     except Exception as e:
         logger.error(f"Error listing sessions: {e}")
         raise HTTPException(status_code=500, detail=f"Sessions error: {str(e)}")
+
+
+@app.get("/api/chat/messages/{message_id}")
+async def get_message(message_id: int):
+    """
+    Get a specific message by ID
+    """
+    if not conversation_db:
+        raise HTTPException(status_code=503, detail="Conversation database not initialized")
+    
+    try:
+        message = conversation_db.get_message(message_id)
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        return message
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error retrieving message: {e}")
+        raise HTTPException(status_code=500, detail=f"Message error: {str(e)}")
+
+
+@app.put("/api/chat/messages/{message_id}")
+async def update_message(message_id: int, update: MessageUpdate):
+    """
+    Update a message
+    """
+    if not conversation_db:
+        raise HTTPException(status_code=503, detail="Conversation database not initialized")
+    
+    try:
+        success = conversation_db.update_message(
+            message_id=message_id,
+            content=update.content,
+            tools_used=update.tools_used,
+            skills_applied=update.skills_applied
+        )
+        if not success:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        # Return updated message
+        updated_message = conversation_db.get_message(message_id)
+        return {
+            "status": "success",
+            "message": "Message updated successfully",
+            "data": updated_message
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating message: {e}")
+        raise HTTPException(status_code=500, detail=f"Update error: {str(e)}")
+
+
+@app.delete("/api/chat/messages/{message_id}")
+async def delete_message(message_id: int):
+    """
+    Delete a specific message by ID
+    """
+    if not conversation_db:
+        raise HTTPException(status_code=503, detail="Conversation database not initialized")
+    
+    try:
+        success = conversation_db.delete_message(message_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        return {
+            "status": "success",
+            "message": f"Message {message_id} deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting message: {e}")
+        raise HTTPException(status_code=500, detail=f"Delete error: {str(e)}")
+
+
+@app.delete("/api/chat/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """
+    Delete all messages for a session
+    """
+    if not conversation_db:
+        raise HTTPException(status_code=503, detail="Conversation database not initialized")
+    
+    # Validate session ID
+    if not SecurityValidator.validate_session_id(session_id):
+        raise HTTPException(status_code=400, detail="Invalid session ID format")
+    
+    try:
+        success = conversation_db.delete_session(session_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Session not found or already empty")
+        
+        return {
+            "status": "success",
+            "message": f"Session {session_id} deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting session: {e}")
+        raise HTTPException(status_code=500, detail=f"Delete error: {str(e)}")
 
 
 # Knowledge Base Management Endpoints

@@ -408,17 +408,38 @@ function createConversationElement(conversation, isActive = false) {
 async function deleteConversation(sessionId) {
     if (!confirm('Are you sure you want to delete this conversation?')) return;
 
-    // Remove from UI
-    const item = document.querySelector(`[data-session-id="${sessionId}"]`);
-    if (item) item.remove();
+    try {
+        // Call DELETE endpoint
+        const response = await fetch(`${API_BASE}/chat/sessions/${sessionId}`, {
+            method: 'DELETE'
+        });
 
-    // If it's the current session, create a new one
-    if (sessionId === state.sessionId) {
-        createNewConversation();
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+            throw new Error(error.detail || 'Failed to delete conversation');
+        }
+
+        const result = await response.json();
+        console.log('Conversation deleted:', result);
+
+        // Remove from UI
+        const item = document.querySelector(`[data-session-id="${sessionId}"]`);
+        if (item) item.remove();
+
+        // If it's the current session, create a new one
+        if (sessionId === state.sessionId) {
+            createNewConversation();
+        }
+
+        // Remove from state
+        state.conversations = state.conversations.filter(c => c.session_id !== sessionId);
+
+        // Show success message
+        showNotification('Conversation deleted successfully', 'success');
+    } catch (error) {
+        console.error('Error deleting conversation:', error);
+        showNotification(`Failed to delete conversation: ${error.message}`, 'error');
     }
-
-    // Remove from state
-    state.conversations = state.conversations.filter(c => c.session_id !== sessionId);
 }
 
 // Make deleteConversation available globally

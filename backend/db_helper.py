@@ -181,4 +181,132 @@ class ConversationDB:
         except Exception as e:
             logger.error(f"Error retrieving sessions: {e}")
             return []
+    
+    def delete_message(self, message_id: int) -> bool:
+        """Delete a specific message by ID"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+            deleted = cursor.rowcount > 0
+            
+            conn.commit()
+            conn.close()
+            
+            if deleted:
+                logger.info(f"Deleted message with id: {message_id}")
+            else:
+                logger.warning(f"Message with id {message_id} not found")
+            
+            return deleted
+        except Exception as e:
+            logger.error(f"Error deleting message: {e}")
+            return False
+    
+    def delete_session(self, session_id: str) -> bool:
+        """Delete all messages for a session"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+            deleted_count = cursor.rowcount
+            
+            conn.commit()
+            conn.close()
+            
+            if deleted_count > 0:
+                logger.info(f"Deleted {deleted_count} messages for session {session_id}")
+                return True
+            else:
+                logger.warning(f"No messages found for session {session_id}")
+                return False
+        except Exception as e:
+            logger.error(f"Error deleting session: {e}")
+            return False
+    
+    def update_message(
+        self,
+        message_id: int,
+        content: Optional[str] = None,
+        tools_used: Optional[List[str]] = None,
+        skills_applied: Optional[List[str]] = None
+    ) -> bool:
+        """Update a message"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            updates = []
+            params = []
+            
+            if content is not None:
+                updates.append("content = ?")
+                params.append(content)
+            
+            if tools_used is not None:
+                updates.append("tools_used = ?")
+                params.append(json.dumps(tools_used))
+            
+            if skills_applied is not None:
+                updates.append("skills_applied = ?")
+                params.append(json.dumps(skills_applied))
+            
+            if not updates:
+                conn.close()
+                return False
+            
+            params.append(message_id)
+            query = f"UPDATE messages SET {', '.join(updates)} WHERE id = ?"
+            
+            cursor.execute(query, params)
+            updated = cursor.rowcount > 0
+            
+            conn.commit()
+            conn.close()
+            
+            if updated:
+                logger.info(f"Updated message with id: {message_id}")
+            else:
+                logger.warning(f"Message with id {message_id} not found")
+            
+            return updated
+        except Exception as e:
+            logger.error(f"Error updating message: {e}")
+            return False
+    
+    def get_message(self, message_id: int) -> Optional[Dict]:
+        """Get a specific message by ID"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT id, session_id, user_id, role, content, tools_used, 
+                       skills_applied, trajectory_id, timestamp
+                FROM messages
+                WHERE id = ?
+            """, (message_id,))
+            
+            row = cursor.fetchone()
+            conn.close()
+            
+            if row:
+                return {
+                    'id': row['id'],
+                    'session_id': row['session_id'],
+                    'user_id': row['user_id'],
+                    'role': row['role'],
+                    'content': row['content'],
+                    'tools_used': json.loads(row['tools_used']) if row['tools_used'] else [],
+                    'skills_applied': json.loads(row['skills_applied']) if row['skills_applied'] else [],
+                    'trajectory_id': row['trajectory_id'],
+                    'timestamp': row['timestamp']
+                }
+            return None
+        except Exception as e:
+            logger.error(f"Error retrieving message: {e}")
+            return None
 

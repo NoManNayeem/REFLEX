@@ -78,3 +78,10 @@ class AgentStats(BaseModel):
     trajectory_count: int = Field(..., description="Number of stored trajectories")
     top_skills: List[Dict[str, Any]] = Field(default_factory=list, description="Top performing skills")
 
+
+class MessageUpdate(BaseModel):
+    """Request model for updating a message"""
+    content: Optional[str] = Field(None, description="Updated message content")
+    tools_used: Optional[List[str]] = Field(None, description="Updated tools used")
+    skills_applied: Optional[List[str]] = Field(None, description="Updated skills applied")
+
