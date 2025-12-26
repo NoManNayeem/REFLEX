@@ -1,9 +1,10 @@
 // REFLEX - Research Engine with Feedback-Driven Learning - Frontend Application
 
-// API_BASE - Use localhost for browser access (works in both Docker and local dev)
-// In Docker, the browser accesses localhost:8000 which is mapped to the backend container
-// Note: Browser runs on host machine, so it must use localhost, not Docker service names
-const API_BASE = 'http://localhost:8000/api';
+// API_BASE - Use relative path for production/Docker (via Nginx proxy)
+// This allows the frontend to work seamlessly on any host/port
+const API_BASE = window.location.origin.includes('localhost:3000')
+    ? 'http://localhost:8000/api'
+    : '/api';
 console.log('API Base URL:', API_BASE);
 
 // State management
@@ -619,7 +620,8 @@ async function sendMessage() {
                                 replaceStreamingMessage(agentMessageId, finalContent, {
                                     tools: toolsUsed,
                                     skills: relevantSkills,
-                                    sources: sources
+                                    sources: sources,
+                                    critic_score: data.critic_score
                                 });
                             } else {
                                 // Fallback: create message if streaming didn't work
@@ -627,7 +629,8 @@ async function sendMessage() {
                                 addMessage('agent', finalContent, {
                                     tools: toolsUsed,
                                     skills: relevantSkills,
-                                    sources: sources
+                                    sources: sources,
+                                    critic_score: data.critic_score
                                 });
                             }
 
@@ -636,7 +639,8 @@ async function sendMessage() {
                                 message: accumulatedContent,
                                 tools_used: toolsUsed,
                                 relevant_skills: relevantSkills,
-                                sources: sources
+                                sources: sources,
+                                critic_score: data.critic_score
                             };
                             updateTrajectoryInfo(state.lastTrajectory);
 
@@ -730,6 +734,15 @@ function addMessage(type, content, meta = {}, shouldScroll = true) {
                 </a>`;
             }).join('');
             metaDiv.innerHTML += `<div class="message-sources"><i class="fas fa-link"></i> Sources: ${sourcesHtml}</div>`;
+        }
+
+        if (meta.critic_score !== undefined && meta.critic_score > 0) {
+            const score = parseFloat(meta.critic_score);
+            let color = '#ef4444'; // red
+            if (score >= 0.7) color = '#22c55e'; // green
+            else if (score >= 0.4) color = '#eab308'; // yellow
+
+            metaDiv.innerHTML += `<span style="margin-left: 10px; color: ${color}; font-weight: bold; font-size: 0.85em;"><i class="fas fa-check-circle"></i> Critic: ${score.toFixed(2)}</span>`;
         }
 
         contentDiv.appendChild(metaDiv);

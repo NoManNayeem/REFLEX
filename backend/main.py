@@ -261,6 +261,7 @@ async def chat(request: Request, chat_request: ChatRequest):
             trajectory_id=session_id,
             tools_used=tools_used,
             relevant_skills=relevant_skills,
+            critic_score=result.get('critic_score', 0.0),
             timestamp=datetime.now().isoformat()
         )
         
@@ -359,6 +360,7 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
                     tools_used = chunk.get('tools_used', [])
                     relevant_skills = chunk.get('relevant_skills', [])
                     sources = chunk.get('sources', [])
+                    critic_score = chunk.get('critic_score', 0.0)
                     
                     # Send final content update
                     done_data = {
@@ -367,7 +369,8 @@ async def chat_stream(request: Request, chat_request: ChatRequest):
                         'done': True,
                         'tools_used': tools_used,
                         'relevant_skills': relevant_skills,
-                        'sources': sources
+                        'sources': sources,
+                        'critic_score': critic_score
                     }
                     yield f"data: {json.dumps(done_data)}\n\n"
                     
@@ -427,12 +430,13 @@ async def submit_feedback(request: FeedbackRequest):
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
     try:
-        # Create reward signal
+        # Create reward signal with adaptive weights if available
         reward_signal = RewardSignal(
             task_success=request.task_success,
             quality_score=request.quality_score,
             efficiency_score=request.efficiency_score,
-            user_feedback=request.user_feedback
+            user_feedback=request.user_feedback,
+            adaptive_weights=getattr(agent_instance, 'adaptive_reward_weights', None)
         )
         
         # Create skill if provided

@@ -20,3 +20,10 @@ validators==0.22.0
 pydantic-settings==2.1.0
 
 pandas
+chonkie==0.1.0
+
+# Advanced RL components (optional but recommended)
+scikit-learn>=1.3.0
+
+# RAG Enhancement (optional but recommended)
+cohere>=4.0.0
